@@ -34,7 +34,7 @@ log_facility=LOG_LOCAL0
 auto_aliases=no
 
 
-listen=udp:10.8.30.10:5060   # CUSTOMIZE ME
+listen=udp:192.168.0.13:5060   # CUSTOMIZE ME
 
 
 
@@ -162,16 +162,12 @@ modparam("drouting","db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("tm", "fr_timeout", 3)
 modparam("tm", "fr_inv_timeout", 20)
 
-### S1 ###
 loadmodule "avpops.so"
-### S1 ###
 loadmodule "dialplan.so"
 
-### S2 ###
 #------ avpops params -----
 modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("avpops", "avp_table", "usr_preferences")
-### S2 ###
 
 #------ load the dpid field to a pseudo-variable $avp(dpid) ------
 modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid;$avp(passwd)=password")
@@ -362,14 +358,20 @@ route{
 		exit;
 	}
 
-	## S3 ##
+	## S1 ##
 	if(avp_db_load("$ru","$avp(callfwd)")) {
 	     $ru=$avp(callfwd);
 	     xlog("forwarded to: $avp(callfwd)");
 	}
-	## S3 ##
+	## S1 ##
 
-	alias_db_lookup("dbaliases");
+	if($rU=~"^rg") route(ring_group);
+
+	$var(hg)=0;
+	if($rU=~"^hg") { 
+		route(hunt_group);
+		$var(hg)=1;
+	}
 
 	# Dial plan processing
 	if( !is_avp_set("$avp(dpid)") ) {
@@ -400,6 +402,24 @@ route{
 	sl_send_reply("420", "Invalid Extension");
 	exit;
 	### S3 ###
+
+	alias_db_lookup("dbaliases");
+
+	# do lookup with method filtering
+	if (!lookup("location","m")) {
+		if (!db_does_uri_exist()) {
+			send_reply("420","Bad Extension");
+			exit;
+		}
+		
+		t_newtran();
+		t_reply("404", "Not Found");
+		exit;
+	} 
+
+	# when routing via usrloc, log the missed calls also
+	setflag(ACC_MISSED);
+	route(relay);
 }
 
 
@@ -429,10 +449,12 @@ route[relay] {
 	if (is_method("INVITE")) {
 		t_on_branch("per_branch_ops");
 		t_on_reply("handle_nat");
-		t_on_failure("missed_call");
+		if($var(hg)==1) {
+			t_on_failure("hunt_fail"); 
+		} else {
+			t_on_failure("missed_call");
+		}
 	}
-
-	
 
 	if (!t_relay()) {
 		send_reply("500","Internal Error");
@@ -459,12 +481,10 @@ route[usrloc]{
 	route(relay);
 }
 
-### S5 ###
 route[media] {
 	rewritehostport("192.168.11.137:5061");
 	route(relay);
 }
-### S5 ###
 
 
 
@@ -491,7 +511,7 @@ failure_route[missed_call] {
 	##	exit;
 	##}
 
-	## S4 ##
+	## S2 ##
 	##--
 	##-- If busy send to the e-mail server, prefix the "b"
 	##-- character to indicate busy. 
@@ -518,7 +538,7 @@ failure_route[missed_call] {
 		route(relay);
 		exit;
 	}
-	## S4 ##
+	## S2 ##
 }
 
 failure_route[gateway_fail] {
@@ -540,4 +560,75 @@ failure_route[gateway_fail] {
 }
 
 
+route[ring_group] {
+	#Load the group
+	if(avp_db_query("select username from grp where grp='$rU'","$avp(users)")) {
+		$var(uri)="";
+		$var(i)=0;
+		for ($var(uri) in $(avp(users)[*])) {
+			$rU=$var(uri);
+			if(lookup("location","m")) {
+				if($var(i)!=0) append_branch();
+				$var(i)=$var(i)+1;
+			}	
+		}
+		if($var(i)!=0) { 
+			route(relay);
+		} else {
+			sl_send_reply("404","No users registered in ring group");
+		}
+	} else {
+		sl_send_reply("404","Ring group is empty");
+	}
+	exit;		
+}
 
+route[hunt_group] {
+        #Load the group
+	$var(hg)=0;
+        if(avp_db_query("select username from grp where grp='$rU' order by id","$avp(users)")) {
+        	xlog("L_INFO","Hunt group loaded $(avp(users)[*])");
+		$var(hg)=1;
+	} else {
+                sl_send_reply("404","Hunt group is empty");
+		exit;
+        }
+	$rU=$avp(users);
+	lookup("location","m");
+	#Delete the value on the top of the AVP after use
+	$avp(users)=NULL;
+	route(relay);
+	exit;
+}
+
+
+failure_route[hunt_fail] {
+	xlog("L_INFO","Hunt fail $(avp(users)[*])");
+	$var(hg)=1;	
+		
+	# if there are still values in the avp. 
+	if(is_avp_set("$avp(users)")) {
+		xlog("L_INFO","Still avps available  $(avp(users)[*])");
+		for ($var(uri) in $(avp(users)[*])) {
+			revert_uri;
+			$rU=$var(uri);
+			xlog("L_INFO","Next hunt target $ru");
+			
+			if(lookup("location","m")) {
+				#Delete the value on top of the AVP
+				$avp(users)=NULL;
+				route(relay);
+				exit;
+			} else {
+				if(!is_avp_set("$avp(users)")) {
+					t_reply("404","No more users in the hunt group");
+					exit;
+				}
+			}
+		}
+
+	} else {
+		t_reply("404","Hunt group has no more destinations");
+		exit;
+	}
+}
