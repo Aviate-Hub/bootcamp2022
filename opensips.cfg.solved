@@ -21,6 +21,7 @@ log_level=3
 log_stderror=no
 log_facility=LOG_LOCAL0
 
+children=4
 
 /* uncomment the next line to enable the auto temporary blacklisting of 
    not available destinations (default disabled) */
@@ -35,9 +36,7 @@ log_facility=LOG_LOCAL0
 auto_aliases=no
 
 
-listen=udp:192.168.0.105   # CUSTOMIZE ME
-
-
+listen=udp:192.168.0.105:5060   # CUSTOMIZE ME
 
 
 ####### Modules Section ########
@@ -114,6 +113,7 @@ modparam("acc", "report_cancels", 0)
    if you enable this parameter, be sure the enable "append_fromtag"
    in "rr" module */
 modparam("acc", "detect_direction", 0)
+/* account triggers (flags) */
 
 
 #### AUTHentication modules
@@ -123,7 +123,6 @@ modparam("auth_db", "calculate_ha1", yes)
 modparam("auth_db", "password_column", "password")
 modparam("auth_db|uri", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
-modparam("auth_db", "load_credentials", "")
 
 
 #### Domain Module
@@ -144,7 +143,6 @@ loadmodule "cachedb_local.so"
 modparam("auth","username_spec","$avp(userspec)")
 modparam("auth","password_spec","$avp(passwd)")
 modparam("auth","calculate_ha1",1)
-modparam("auth_db", "load_credentials", "$avp(passwd)=password")
 
 loadmodule "permissions.so"
 loadmodule "group.so"
@@ -155,20 +153,33 @@ modparam("permissions", "db_url",
 modparam("group", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
-## S1 ## 
 loadmodule "drouting.so"
-## S1 ##
 
-## S2 ##
 # ----- drouting params -----
 modparam("drouting", "use_domain", 0)
 modparam("drouting","db_url", "mysql://opensips:opensipsrw@localhost/opensips")
+modparam("drouting", "define_blacklist", 'gws= 0')
 
 # ----- tm params -----
 modparam("tm", "fr_timeout", 3)
 modparam("tm", "fr_inv_timeout", 20)
 
-## S2 ##
+### S1 ###
+loadmodule "avpops.so"
+loadmodule "dialplan.so"
+### S1 ###
+
+### S2 ###
+#------ avpops params -----
+modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
+modparam("avpops", "avp_table", "usr_preferences")
+
+#------ load the dpid field to a pseudo-variable $avp(dpid) ------
+modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid;$avp(passwd)=password")
+modparam("dialplan", "db_url","mysql://opensips:opensipsrw@localhost/opensips")
+## attribute of the matched line will be store in the $avp(dest) 
+### S2 ###
+
 
 loadmodule "proto_udp.so"
 
@@ -287,7 +298,7 @@ route{
 
 	if (!is_uri_host_local()) {
 		append_hf("P-hint: outbound\r\n"); 
-		
+		use_blacklist("gws");
 		route(relay);
 	}
 
@@ -361,66 +372,42 @@ route{
 		sl_send_reply("484","Address Incomplete");
 		exit;
 	}
-	
-	# Dialing 7 digits, The number will be normalized to e164 without (1+305+N7)
-	if ($rU=~"^[2-9][0-9]{6}$") {
-        	 if (db_is_user_in("credentials","local")) {
-	             prefix("1305");
-        	     route(pstn);
-	             exit;
- 	        } else {
-        	     sl_send_reply("403", "No permissions for local calls");
-	             exit;
-        	 }
-	}
 
-	# Long distance calls using 1+Area Code+N7
-	if (uri=~"^sip:1[0-9][0-9][0-9][2-9][0-9]{6}@") {
-	        if (db_is_user_in("credentials","ld")) {
-	             route(pstn);
-        	     exit;
-	         } else {
-        	     sl_send_reply("403", "No permissions for long distance");
-	             exit;
-        	 }
-	}
-            
-	#International Calls using 011+e164 number
-	if (uri=~"^sip:011[0-9]*@") {
-        	 if (db_is_user_in("credentials","int")) {
-			strip(3);
-			route(pstn);
-			exit;
-        	 } else {
-			sl_send_reply("403", "No permissions for international calls");
-			exit;
-	         }
-	}
-
-	#apply DB based aliases (uncomment to enable)
 	alias_db_lookup("dbaliases");
 
-	# do lookup with method filtering
-	if (!lookup("location","m")) {
-		if (!db_does_uri_exist()) {
-			send_reply("420","Bad Extension");
-			exit;
-		}
-		
-		t_newtran();
-		t_reply("404", "Not Found");
+	### S3 ###
+	# Dial plan processing
+	if( !is_avp_set("$avp(dpid)") ) {
+		$avp(dpid)=0;
+	}
+
+	if(!dp_translate("$avp(dpid)","$ruri.user/$ruri.user","$avp(dest)")) {
+		sl_send_reply("404", "Not Found");
 		exit;
-	} 
+	}
+	xlog("Dialplan: Subscriber.s dpid: $(avp(dpid))");
+	xlog("Dialplan: Destination: $avp(dest)");
 
-	
+	if ($avp(dest)=="3") {
+		#Route to usrloc
+		route(usrloc);
+	}
 
-	# when routing via usrloc, log the missed calls also
-	setflag(ACC_MISSED);
-	route(relay);
+	if ($avp(dest)=="4") {
+		#route to drouting
+		route(pstn);
+	}
+
+	if ($avp(dest)=="5") {
+		#route to media server
+		route(media);	
+	}
+	sl_send_reply("404", "Not Found");
+	exit;
+	### S3 ###
 }
 
 
-## S3 ##
 route[pstn] {
     xlog("routed using drouting");
     # routing to the pstn
@@ -440,15 +427,7 @@ route[pstn] {
     }
     exit;
 }
-## S3 ##
 
-
-#route[pstn] {
-    # routing to the pstn (Use the IP address of the gateway)
-    # Please use as the IP address one of the gateways provided
-#    rewritehostport("1.1.1.1:5600");
-#    route(relay);
-#}
 
 route[relay] {
 	# for INVITEs enable some additional helper routes
@@ -466,6 +445,30 @@ route[relay] {
 	exit;
 }
 
+
+### S4 ###
+route[usrloc]{
+	if (!lookup("location")) {
+		switch ($retcode) {
+			case -1:
+			case -3:
+				t_newtran();
+				t_reply("404", "Not Found");
+				exit;
+			case -2:
+				sl_send_reply("405", "Method Not Allowed");
+				exit;
+		}
+	}
+	# when routing via usrloc, log the missed calls also
+	route(relay);
+}
+
+route[media] {
+	rewritehostport("192.168.11.137:5061");
+	route(relay);
+}
+### S4 ###
 
 
 
@@ -496,7 +499,6 @@ failure_route[missed_call] {
 }
 
 
-## S4 ##
 failure_route[gateway_fail] {
 	if (t_was_cancelled()) {
    		exit;
@@ -514,7 +516,6 @@ failure_route[gateway_fail] {
           exit;
 	}
 }
-## S4 ##
 
 
 
