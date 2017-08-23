@@ -40,7 +40,6 @@ children=4
    based on revers DNS on IPs */
 auto_aliases=yes
 alias=opensips.org
-alias=sip.com
 
 listen=udp:192.168.0.105:5060   # CUSTOMIZE ME
 
@@ -124,7 +123,6 @@ modparam("auth_db", "calculate_ha1", 1)
 modparam("auth_db", "password_column", "password")
 modparam("auth_db|uri", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
-modparam("auth_db", "load_credentials", "")
 
 #### Domain Module
 loadmodule "domain.so"
@@ -133,13 +131,23 @@ modparam("domain", "db_url",
 modparam("domain", "db_mode", 1)   # Use caching
 modparam("uri|auth_db|usrloc", "use_domain", 1)
 
-### S1 ###
 loadmodule "alias_db.so"
 
 # ----- alias_db params -----
 modparam("alias_db", "db_url",
         "mysql://opensips:opensipsrw@localhost/opensips")
+
 ### S1 ###
+loadmodule "cachedb_local.so"
+### S1 ###
+
+### S2 ###
+modparam("auth","username_spec","$avp(userspec)")
+modparam("auth","password_spec","$avp(passwd)")
+modparam("auth","calculate_ha1",1)
+modparam("auth_db", "load_credentials", "$avp(passwd)=password")
+### S2 ###
+
 
 loadmodule "proto_udp.so"
 
@@ -265,22 +273,45 @@ route{
 
 	if (is_method("REGISTER"))
 	{
-		# authenticate the REGISTER requests
-		if (!www_authorize("", "subscriber"))
-		{
-			www_challenge("", "0");
-			exit;
-		}
-		
-		if (!db_check_to()) 
-		{
-			sl_send_reply("403","Forbidden auth ID");
-			exit;
-		}
+		### S3 ###
+                ### Caching for registration passwords ###
+                # do we have the password cached ?
+                if(cache_fetch("local","passwd_$tU@$td",$avp(passwd))) {
+                        $avp(userspec) = $tU;
+                        xlog("SCRIPT: stored password is $avp(passwd)\n");
+                        # perform auth from variables
+                        # $avp(userspec) contains the username
+                        # $avp(passwd) contains the password
+                        if (!pv_www_authorize("")) {
+                                # authentication failed -> do challenge
+                                www_challenge("", "0");
+                                exit;
+                        };
+                } else {
+                        # perform DB authentication ->
+                        # password will be loaded from DB automatically
+                        if (!www_authorize("", "subscriber")) {
+                                # authentication failed -> do challenge
+                                 www_challenge("", "0");
+                                 exit;
+                        };
+                        # after DB authentication, the password is available
+                        # in $avp(passwd) because of the "load_credentials"
+                        # module parameter.
+                        xlog("SCRIPT: storing password <$avp(passwd)> on $tU@$td\n");
+                        # use a 20 minutes lifetime for the password;
+                        # after that, it will erased from cache and we do
+                        # db authentication again (refresh the passwd from DB)
+                        cache_store("local","passwd_$tU@$td","$avp(passwd)",1200);
+                }
+                ### S3 ###
 
-		if (   0 ) setflag(TCP_PERSISTENT);
+		if (!db_check_to())
+                {
+                        sl_send_reply("403","Forbidden auth ID");
+                        exit;
+                }
 
-		
 
 		if (!save("location"))
 			sl_reply_error();
@@ -294,10 +325,8 @@ route{
 		exit;
 	}
 
-	### S2 ###
         #apply DB based aliases (uncomment to enable)
         alias_db_lookup("dbaliases");
-        ### S2 ###
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
