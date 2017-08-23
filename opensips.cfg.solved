@@ -34,9 +34,7 @@ log_facility=LOG_LOCAL0
 auto_aliases=no
 
 
-listen=udp:192.168.0.13:5060   # CUSTOMIZE ME
-
-
+listen=udp:192.168.0.45:5060   # CUSTOMIZE ME
 
 
 ####### Modules Section ########
@@ -79,15 +77,18 @@ loadmodule "uri.so"
 modparam("uri", "use_uri_table", 0)
 
 
-
-
-
-
-
 #### MYSQL module
 loadmodule "db_mysql.so"
 
-
+### S1 ###
+#### Dialog Module
+loadmodule "dialog.so"
+modparam("dialog", "profiles_with_value", "caller ; domain")
+modparam("dialog", "profiles_no_value", "progress ; active")
+modparam("dialog", "db_mode", 2)
+modparam("dialog", "db_url",
+	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
+### S1 ###
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
@@ -193,6 +194,7 @@ route{
 		# sequential request withing a dialog should
 		# take the path determined by record-routing
 		if (loose_route()) {
+			if(is_present_hf("Authorization")) consume_credentials();
 			
 			if (is_method("INVITE")) {
 				# even if in most of the cases is useless, do RR for
@@ -267,6 +269,31 @@ route{
 		}
 
 	}
+
+	### S2 ###
+	### Create a new dialog ###
+	create_dialog();
+
+	### Set profile ###
+	if(is_method("INVITE")) {
+		if($DLG_status!=NULL) {
+			set_dlg_profile("caller","$fU@$fd");
+			set_dlg_profile("domain","$fd");
+		}
+
+		#Counter for  calls from this caller
+		$var(ccaller)=0;
+		#counter for calls from this domain
+		$var(cdomain)=0;	
+
+		get_profile_size("caller","$fU@$fd","$var(ccaller)");
+		get_profile_size("caller","$fd","$var(cdomain)");
+		xlog("L_INFO", "Number of calls from user $fU@$fd is $var(ccaller)");
+		xlog("L_INFO", "Number of calls from domain $fd is $var(cdomain)");
+
+	}
+	### S2 ###
+
 
 	# preloaded route checking
 	if (loose_route()) {
@@ -358,19 +385,9 @@ route{
 		exit;
 	}
 
-	## S1 ##
 	if(avp_db_load("$ru","$avp(callfwd)")) {
 	     $ru=$avp(callfwd);
 	     xlog("forwarded to: $avp(callfwd)");
-	}
-	## S1 ##
-
-	if($rU=~"^rg") route(ring_group);
-
-	$var(hg)=0;
-	if($rU=~"^hg") { 
-		route(hunt_group);
-		$var(hg)=1;
 	}
 
 	# Dial plan processing
@@ -401,7 +418,6 @@ route{
 	}
 	sl_send_reply("420", "Invalid Extension");
 	exit;
-	### S3 ###
 
 	alias_db_lookup("dbaliases");
 
@@ -449,12 +465,10 @@ route[relay] {
 	if (is_method("INVITE")) {
 		t_on_branch("per_branch_ops");
 		t_on_reply("handle_nat");
-		if($var(hg)==1) {
-			t_on_failure("hunt_fail"); 
-		} else {
-			t_on_failure("missed_call");
-		}
+		t_on_failure("missed_call");
 	}
+
+	
 
 	if (!t_relay()) {
 		send_reply("500","Internal Error");
@@ -494,10 +508,32 @@ branch_route[per_branch_ops] {
 
 
 onreply_route[handle_nat] {
+	### S3 ###
+	if($DLG_status!=NULL && is_method("INVITE")) {
+		if($rs=~"18[0-9]") {
+			set_dlg_profile("progress");
+		} else {
+			if(is_in_profile("progress")) unset_dlg_profile("progress");
+		}
+		if($rs=~"2[0-9][0-9]") {
+			set_dlg_profile("active");
+		} else {
+			if(is_in_profile("active")) unset_dlg_profile("active");
+		}
+	}
 	
-	xlog("incoming reply\n");
+	if(is_method("INVITE")) {
+		#Active Call Counter
+		$var(cactive)=0;
+		#In Progress Call Counter
+		$var(cprogress)=0;
+		get_profile_size("active","$var(cactive)");
+		get_profile_size("progress","$var(cprogress)");
+		xlog("L_INFO","There are $var(cactive) active calls and $var(cprogress) calls in progress");
+	} 	
+	### S3 ###
+	
 }
-
 
 failure_route[missed_call] {
 	if (t_was_cancelled()) {
@@ -511,7 +547,6 @@ failure_route[missed_call] {
 	##	exit;
 	##}
 
-	## S2 ##
 	##--
 	##-- If busy send to the e-mail server, prefix the "b"
 	##-- character to indicate busy. 
@@ -538,7 +573,6 @@ failure_route[missed_call] {
 		route(relay);
 		exit;
 	}
-	## S2 ##
 }
 
 failure_route[gateway_fail] {
@@ -560,75 +594,4 @@ failure_route[gateway_fail] {
 }
 
 
-route[ring_group] {
-	#Load the group
-	if(avp_db_query("select username from grp where grp='$rU'","$avp(users)")) {
-		$var(uri)="";
-		$var(i)=0;
-		for ($var(uri) in $(avp(users)[*])) {
-			$rU=$var(uri);
-			if(lookup("location","m")) {
-				if($var(i)!=0) append_branch();
-				$var(i)=$var(i)+1;
-			}	
-		}
-		if($var(i)!=0) { 
-			route(relay);
-		} else {
-			sl_send_reply("404","No users registered in ring group");
-		}
-	} else {
-		sl_send_reply("404","Ring group is empty");
-	}
-	exit;		
-}
 
-route[hunt_group] {
-        #Load the group
-	$var(hg)=0;
-        if(avp_db_query("select username from grp where grp='$rU' order by id","$avp(users)")) {
-        	xlog("L_INFO","Hunt group loaded $(avp(users)[*])");
-		$var(hg)=1;
-	} else {
-                sl_send_reply("404","Hunt group is empty");
-		exit;
-        }
-	$rU=$avp(users);
-	lookup("location","m");
-	#Delete the value on the top of the AVP after use
-	$avp(users)=NULL;
-	route(relay);
-	exit;
-}
-
-
-failure_route[hunt_fail] {
-	xlog("L_INFO","Hunt fail $(avp(users)[*])");
-	$var(hg)=1;	
-		
-	# if there are still values in the avp. 
-	if(is_avp_set("$avp(users)")) {
-		xlog("L_INFO","Still avps available  $(avp(users)[*])");
-		for ($var(uri) in $(avp(users)[*])) {
-			revert_uri;
-			$rU=$var(uri);
-			xlog("L_INFO","Next hunt target $ru");
-			
-			if(lookup("location","m")) {
-				#Delete the value on top of the AVP
-				$avp(users)=NULL;
-				route(relay);
-				exit;
-			} else {
-				if(!is_avp_set("$avp(users)")) {
-					t_reply("404","No more users in the hunt group");
-					exit;
-				}
-			}
-		}
-
-	} else {
-		t_reply("404","Hunt group has no more destinations");
-		exit;
-	}
-}
