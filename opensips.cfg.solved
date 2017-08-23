@@ -23,6 +23,7 @@ log_facility=LOG_LOCAL0
 
 children=4
 
+
 /* uncomment the next line to enable the auto temporary blacklisting of 
    not available destinations (default disabled) */
 #disable_dns_blacklist=no
@@ -96,6 +97,7 @@ loadmodule "db_mysql.so"
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
+modparam("usrloc", "nat_bflag", "NAT")
 modparam("usrloc", "db_mode",   2)
 modparam("usrloc", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
@@ -108,15 +110,6 @@ modparam("registrar", "tcp_persistent_flag", "TCP_PERSISTENT")
 /* uncomment the next line not to allow more than 10 contacts per AOR */
 #modparam("registrar", "max_contacts", 10)
 
-#### ACCounting module
-loadmodule "acc.so"
-/* what special events should be accounted ? */
-modparam("acc", "early_media", 0)
-modparam("acc", "report_cancels", 0)
-/* by default we do not adjust the direct of the sequential requests.
-   if you enable this parameter, be sure the enable "append_fromtag"
-   in "rr" module */
-modparam("acc", "detect_direction", 0)
 
 
 #### AUTHentication modules
@@ -179,16 +172,11 @@ modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid; $avp
 modparam("dialplan", "db_url","mysql://opensips:opensipsrw@localhost/opensips")
 ## attribute of the matched line will be store in the $avp(dest) 
 
-## --S1-- ##
 loadmodule "nathelper.so"
 loadmodule "rtpproxy.so"
-## --/S1-- ##
 
-## --S2-- ##
-modparam("usrloc","nat_bflag","NAT_BFLAG")
-## --/S2--##
+modparam("usrloc","nat_bflag","NAT_FLAG")
 
-## --S3--##
 # Nathelper parameters
 modparam("registrar","received_avp", "$avp(42)")
 modparam("nathelper","received_avp", "$avp(42)")
@@ -197,8 +185,23 @@ modparam("nathelper", "natping_interval", 30)
 modparam("nathelper", "ping_nated_only", 1)
 modparam("nathelper", "sipping_bflag", "SIPPING_FLAG")
 modparam("nathelper", "sipping_from", "sip:pinger@192.168.0.17")
-## --/S3--##
 
+### S1 ### 
+loadmodule "dialog.so"
+
+#### ACCounting module
+loadmodule "acc.so"
+/* what special events should be accounted ? */
+modparam("acc", "early_media", 0)
+modparam("acc", "report_cancels", 0)
+/* by default we do not adjust the direct of the sequential requests.
+   if you enable this parameter, be sure the enable "append_fromtag"
+   in "rr" module */
+modparam("acc", "detect_direction", 0)
+
+modparam("acc", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
+modparam("acc", "db_extra", "caller_id=$fU; callee_id=$rU; leg_type=$avp(legtype)")
+### S1 ###
 
 loadmodule "proto_udp.so"
 
@@ -214,7 +217,6 @@ route{
 		exit;
 	}
 
-	## --S4-- ##
 	## NAT Detection 
 	#
 	force_rport();
@@ -224,18 +226,20 @@ route{
 		} else {
 			fix_nated_contact();
 		}
-		search_append('Contact:.*sip:[^>[:cntrl:]]*', ';nat=yes');
          	setflag(NAT_FLAG);
 	}
-	## --/S4-- ##
-
 
 	if (has_totag()) {
 		# sequential request withing a dialog should
 		# take the path determined by record-routing
 		if (loose_route()) {
 			
-			if (is_method("INVITE")) {
+			
+			if (is_method("BYE")) {
+				### S2 ###
+				do_accounting("log|db","failed");
+				### S2 ###	
+			} else if (is_method("INVITE")) {
 				# even if in most of the cases is useless, do RR for
 				# re-INVITEs alos, as some buggy clients do change route set
 				# during the dialog.
@@ -266,6 +270,12 @@ route{
 		exit;
 	}
 
+	### S3 ###
+	#Create dialog for initial requests
+	#This will allow ACC to compute duration and setup time
+	if(is_method("INVITE")) create_dialog();
+	### S3 ###
+
 	# CANCEL processing
 	if (is_method("CANCEL"))
 	{
@@ -277,7 +287,7 @@ route{
 	t_check_trans();
 
 	
-	if ( (!is_method("REGISTER") ) ) {
+	if ( (!is_method("REGISTER") && $si!="192.168.0.103" ) ) {
 		if(is_from_local())		
 		{
 			
@@ -309,7 +319,6 @@ route{
 
 	}
 
-
 	# preloaded route checking
 	if (loose_route()) {
 		xlog("L_ERR",
@@ -325,7 +334,6 @@ route{
 
 	if (!is_uri_host_local()) {
 		append_hf("P-hint: outbound\r\n"); 
-		
 		route(relay);
 	}
 
@@ -370,19 +378,25 @@ route{
 		        cache_store("local","passwd_$tu","$avp(passwd)",1200);
 		}
 
+		# authenticate the REGISTER requests
+		#if (!www_authorize("", "subscriber"))
+		#{
+		#	www_challenge("", "0");
+		#	exit;
+		#}
+		
 		if (!db_check_to()) 
 		{
 			sl_send_reply("403","Forbidden auth ID");
 			exit;
 		}
 
+		if (   0 ) setflag(TCP_PERSISTENT);
 
-		## --S5-- ##
 		if (isflagset(NAT_FLAG)) {
 			setbflag(NAT_BFLAG);
 			setbflag(SIPPING_FLAG);
 		};
-		## --/S5-- ##
 
 		if (!save("location"))
 			sl_reply_error();
@@ -445,6 +459,7 @@ route{
 	} 
 
 	# when routing via usrloc, log the missed calls also
+	setflag(ACC_MISSED);
 	route(relay);
 }
 
@@ -463,7 +478,6 @@ route[pstn] {
 		t_on_failure("gateway_fail");
     }
 
-    ## --S6-- ##
     # for INVITEs enable some additional helper routes
     if (subst_uri('/(sip:.*);nat=yes/\1/')){
    		setbflag(NAT_BFLAG);
@@ -472,7 +486,12 @@ route[pstn] {
     if (isflagset(NAT_FLAG)||isbflagset(NAT_BFLAG)) {
            route(mediarelay);
     };
-    ## --/S6--##
+
+    ### S5 ###
+    #account only pstn calls
+    $avp(legtype)="pstn";
+    do_accounting("log|db","cdr|failed");
+    ### S5 ###
 
     if (!t_relay()) {
 		sl_reply_error();
@@ -490,7 +509,6 @@ route[relay] {
 		t_on_failure("missed_call");
 	}
 
-	## --S6-- ##
 	# for INVITEs enable some additional helper routes
 	if (subst_uri('/(sip:.*);nat=yes/\1/')){
    		setbflag(NAT_BFLAG);
@@ -499,7 +517,6 @@ route[relay] {
 	if (isflagset(NAT_FLAG)||isbflagset(NAT_BFLAG)) {
            route(mediarelay);
 	};
-	## --/S6--##
 
 	if (!t_relay()) {
 		send_reply("500","Internal Error");
@@ -522,6 +539,9 @@ route[usrloc]{
 		}
 	}
 	# when routing via usrloc, log the missed calls also
+	### S4 ###
+	if(is_method("INVITE")) do_accounting("db","cdr|missed");
+	### S4 ###
 	route(relay);
 }
 
@@ -537,29 +557,34 @@ branch_route[per_branch_ops] {
 }
 
 
-## --S8-- ##
 onreply_route[handle_nat] {
     #-- On-replay block routing --
     #
+    if ((isflagset(NAT_FLAG) || isbflagset(NAT_BFLAG)) && status=~"(183)|(2[0-9][0-9])"){
+        if($avp(nat)=="normal") {
+            if(has_body("application/sdp")) rtpproxy_answer();
+        } else {
+            if(has_body("application/sdp")) rtpproxy_offer();
+        }
+        append_hf("P-hint: onreply_route|force_rtp_proxy \r\n");
+        search_append('Contact:.*sip:[^>[:cntrl:]]*', ';nat=yes');
+    }
+
     if (isbflagset(NAT_BFLAG)) {
         append_hf("P-hint: Onreply-route - fixcontact \r\n");
-	search_append('Contact:.*sip:[^>[:cntrl:]]*', ';nat=yes');
         fix_nated_contact();
     }
     exit;
 } 
-## --/S8-- ##
 
 failure_route[missed_call] {
 	if (t_was_cancelled()) {
 		exit;
 	}
 
-	## --S9-- ##
 	if (isbflagset(NAT_BFLAG) || isflagset(NAT_FLAG)) {
 		unforce_rtp_proxy();
 	}
-	## --/S9-- ##
 
 	# uncomment the following lines if you want to block client 
 	# redirect based on 3xx replies.
@@ -601,11 +626,9 @@ failure_route[gateway_fail] {
    		exit;
 	}
 
-	## --S9-- ##
 	if (isbflagset(NAT_BFLAG) || isflagset(NAT_FLAG)) {
 		unforce_rtp_proxy();
 	}
-	## --/S9-- ##
 
 	xlog("failure route 2\n");
 	if (t_check_status("(408)|(5[0-9][0-9])")){
@@ -620,18 +643,20 @@ failure_route[gateway_fail] {
 	}
 }
 
-
-## --S7-- ##
 route[mediarelay] {
     if (is_method("INVITE")) {
         if (has_body("application/sdp")) {
-            rtpproxy_engage();
+            if (rtpproxy_offer())
+            $avp(nat)="normal";
+        } else {
+            $avp(nat)="sdkonack";
         }
     }
-    
+    if (is_method("ACK") && has_body("application/sdp"))
+        rtpproxy_answer();
+
     if (is_method("BYE|CANCEL"))
         unforce_rtp_proxy();
 	
 }
-## --/S7--##
 
