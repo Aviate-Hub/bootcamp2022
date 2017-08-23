@@ -27,6 +27,10 @@ children=4
    based on revers DNS on IPs */
 auto_aliases=no
 
+## --S1-- ##
+alias=opensips.org
+## --S1-- ##
+
 
 # SIP UDP listerner
 listen=udp:127.0.0.1
