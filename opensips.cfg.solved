@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 2.1
+#     LAB 2.2
 #
 
 
@@ -156,9 +156,9 @@ route {
 		exit;
 	}
 
-	## --S2-- ## 
-	append_hf("P-hint: (2)initial request\r\n"); 
-	## --S2-- ## 
+	## --S1-- ## 
+	append_hf("P-hint: (1)initial request\r\n"); 
+	## --S1-- ## 
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
@@ -187,9 +187,9 @@ route[handle_sequential]
 		exit;
 	}
 
-	## --S1-- ## 
-	append_hf("P-hint: (1)sequential request\r\n"); 
-	## --S1-- ## 
+	## --S2-- ## 
+	append_hf("P-hint: (2)sequential request\r\n"); 
+	## --S2-- ## 
 
 	xlog("SCRIPT:DBG: sequential $rm sent to $ru/$du\n");
 	route(relay);
