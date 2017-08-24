@@ -130,7 +130,9 @@ route {
 
 	## authenticate and authorize
 	if (from_uri==myself) {
-		# if caller is local, then called number must be local
+	    # caller is local
+	} else {
+		# if caller is not local, then called number must be local
 		if (uri!=myself) {
 			send_reply("403","Rely forbidden");
 			exit;
