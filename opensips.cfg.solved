@@ -34,7 +34,7 @@ alias=opensips.org
 
 # SIP UDP listerner
 listen=udp:127.0.0.1
-listen=hep_udp:127.0.0.1:9060
+listen=hep_udp:127.0.0.1:6090
 
 
 
