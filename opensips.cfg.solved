@@ -27,11 +27,11 @@ children=4
    based on revers DNS on IPs */
 auto_aliases=no
 
-alias=opensips.org
+alias=sip.domain.com
 
 
 # SIP UDP listerner
-listen=udp:127.0.0.1
+listen=udp:eth0:5060
 
 listen=hep_udp:127.0.0.1:6090
 
@@ -70,7 +70,6 @@ loadmodule "sipmsgops.so"
 loadmodule "mi_fifo.so"
 modparam("mi_fifo", "fifo_name", "/tmp/opensips_fifo")
 modparam("mi_fifo", "fifo_mode", 0666)
-
 
 #### URI module
 loadmodule "uri.so"
