@@ -27,8 +27,6 @@ children=4
    based on revers DNS on IPs */
 auto_aliases=no
 
-alias=sip.domain.com
-
 
 # SIP UDP listerner
 listen=udp:eth0:5060
