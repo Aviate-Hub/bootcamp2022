@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 8.1
+#     LAB 8.2
 #
 
 
@@ -143,14 +143,13 @@ modparam("dialog", "db_mode", 2)
 modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
-#### Dispatcher Module
+#### Load Balancer Module
 ### S1 ###
-loadmodule "dispatcher.so"
-modparam("dispatcher","db_url",
-           "mysql://opensips:opensipsrw@localhost/opensips")
-modparam("dispatcher", "ds_ping_interval", 10)
-modparam("dispatcher", "ds_ping_from", "sip:ds@sip.domain.com")
-modparam("dispatcher", "ds_probing_threshhold", 1)
+loadmodule "load_balancer.so"
+modparam("load_balancer", "db_url",
+	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
+modparam("load_balancer", "probing_interval", 30)
+modparam("load_balancer", "probing_from", "sip:lb@sip.domain.com")
 ### S1 ###
 
 #### Tracing modules
@@ -325,9 +324,9 @@ route[to_user] {
 
 ### S2 ###
 route[to_media] {
-	xlog("routing to media servers via dispatcher");
+	xlog("routing to media servers via load balancer");
 
-	if (!ds_select_dst("1", "2","f")) { # over RURI
+	if (!lb_start("1", "channel")) {
 		send_reply("500","No route to Media");
 		exit;
 	}
@@ -347,9 +346,9 @@ failure_route[media_failover] {
 	if ( t_check_status( "[56][0-9][0-9]" ) ||
 	(t_local_replied("all") && t_check_status("408"))) {
 		# media server failover -> mark it as disabled
-		ds_mark_dst();
+		lb_disable_dst();
 		# try another media server, if available
-		if (!ds_next_dst()) {
+		if (!lb_next()) {
 			xlog("no more media servers available\n");
 			t_reply("503","Service Unavailable");
 			exit;
