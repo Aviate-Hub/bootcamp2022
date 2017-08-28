@@ -299,6 +299,7 @@ route[to_user] {
 route[to_media] {
 	rewritehostport("192.168.11.137:5061");
 	t_relay();
+	exit;
 }
 ### S5 ###
 
