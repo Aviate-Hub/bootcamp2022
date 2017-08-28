@@ -315,10 +315,8 @@ route[to_homer] {
 			$var(trace_type) = "dialog";
 		else if (!is_method("CANCEL"))
 			$var(trace_type) = "transaction";
-	} else if (is_method("SUBSCRIBE|NOTIFY")) {
-		$var(trace_type) = "transaction";
 	} else {
-		$var(trace_type) = NULL;
+		$var(trace_type) = "transaction";
 	}
 
 	# do trace here
