@@ -526,6 +526,7 @@ route[to_homer] {
 	# do trace here
 	switch ($var(trace_type)) {
 	case "dialog":
+		sip_trace("$var(trace_id)", "d", "sip|xlog");
 	case "transaction":
 		sip_trace("$var(trace_id)", "t", "sip|xlog");
 		break;
