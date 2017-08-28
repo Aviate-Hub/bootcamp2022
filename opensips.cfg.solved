@@ -335,7 +335,8 @@ route[to_media] {
 
 	t_on_failure("media_failover");
 
-	route(relay);
+	t_relay();
+	exit;
 }
 ### S2 ###
 
