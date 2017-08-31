@@ -285,6 +285,7 @@ route[to_pstn] {
 	# Please use as the IP address one of the gateways provided
 	rewritehostport("1.1.1.1:5600");
 	t_relay();
+	exit;
 }
 ## S5 ##
 
