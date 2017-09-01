@@ -310,20 +310,18 @@ route[to_homer] {
 	$var(trace_id) = "tid";
 	$var(trace_type) = NULL;
 
-	if (!has_totag()) {
-		if (is_method("INVITE"))
-			$var(trace_type) = "dialog";
-		else if (!is_method("CANCEL"))
-			$var(trace_type) = "transaction";
-	} else if (is_method("ACK")) {
-		$var(trace_type) = "message";
+	t_newtran();
+
+	if (has_totag() && is_method("ACK")) {
+		/* avoid double-tracing hop-by-hop ACKs */
+		if (!t_check_trans())
+			$var(trace_type) = "message";
 	} else {
 		$var(trace_type) = "transaction";
 	}
 
 	# do trace here
 	switch ($var(trace_type)) {
-	case "dialog":
 	case "transaction":
 		sip_trace("$var(trace_id)", "t", "sip|xlog");
 		break;
