@@ -130,18 +130,11 @@ loadmodule "drouting.so"
 modparam("drouting","db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
-#### AVP OPerations module
-### S2 ###
-loadmodule "avpops.so"
-modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
-modparam("avpops", "avp_table", "usr_preferences")
-### S2 ###
-
 #### Dialplan module
-### S3 ###
+### S2 ###
 loadmodule "dialplan.so"
 modparam("dialplan", "db_url","mysql://opensips:opensipsrw@localhost/opensips")
-### S3 ###
+### S2 ###
 
 #### Tracing modules
 loadmodule "proto_hep.so"
@@ -246,7 +239,7 @@ route {
 	#apply DB based aliases
 	alias_db_lookup("dbaliases");
 
-	### S4 ###
+	### S3 ###
 	# Dial plan processing
 	if( $avp(dpid)==NULL ) {
 		$avp(dpid)=0;
@@ -276,7 +269,7 @@ route {
 
 	send_reply("404", "Unknown Destination");
 	exit;
-	### S4 ###
+	### S3 ###
 }
 
 
@@ -295,13 +288,13 @@ route[to_user] {
 }
 
 
-### S5 ###
+### S4 ###
 route[to_media] {
 	rewritehostport("192.168.11.137:5061");
 	t_relay();
 	exit;
 }
-### S5 ###
+### S4 ###
 
 
 route[to_pstn] {
