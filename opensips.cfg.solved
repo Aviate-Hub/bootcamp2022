@@ -127,10 +127,12 @@ loadmodule "drouting.so"
 modparam("drouting","db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
+## S1 ##
 #### AVP OPerations module
 loadmodule "avpops.so"
 modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("avpops", "avp_table", "usr_preferences")
+## S1 ##
 
 #### Dialplan module
 loadmodule "dialplan.so"
@@ -272,13 +274,13 @@ route {
 
 
 route[to_user] {
-	## S1 ##
+	## S2 ##
 	if(avp_db_load("$ru","$avp(callfwd)")) {
 		$ru=$avp(callfwd);
 		xlog("forwarded to: $avp(callfwd)");
 	}
 	$avp(callee_id) = $rd;
-	## S1 ##
+	## S2 ##
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
@@ -388,7 +390,7 @@ failure_route[missed_call] {
 		exit;
 	}
 
-	## S2 ##
+	## S3 ##
 	##--
 	##-- If busy send to the e-mail server, prefix the "b"
 	##-- character to indicate busy. 
@@ -413,7 +415,7 @@ failure_route[missed_call] {
 		route(to_media);
 		exit;
 	}
-	## S2 ##
+	## S3 ##
 
 	# uncomment the following lines if you want to block client 
 	# redirect based on 3xx replies.
