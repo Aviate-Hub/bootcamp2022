@@ -394,7 +394,7 @@ failure_route[missed_call] {
 	##-- character to indicate busy. 
 	##--
 	if (t_check_status("486")) {
-		$ru = $avp(callee_id);
+		$rU = $avp(callee_id);
 		prefix("b"); #This prefix is included to play the busy message
 		xlog("redirect on 486 to ruri=<$ru>");
 		route(to_media);
@@ -407,7 +407,7 @@ failure_route[missed_call] {
 	##-- sever
 	##--
 	if (t_check_status("408") || t_check_status("480")) {
-		$ru = $avp(callee_id);
+		$rU = $avp(callee_id);
 		prefix("u"); #This prefix is included to play the unanswered message
 		xlog("redirect on 408/480 to ruri=<$ru>");
 		route(to_media);
