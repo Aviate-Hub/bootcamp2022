@@ -241,6 +241,14 @@ route {
 	#apply DB based aliases
 	alias_db_lookup("dbaliases");
 
+	## S2 ##
+	if(avp_db_load("$ru","$avp(callfwd)")) {
+		$ru=$avp(callfwd);
+		xlog("forwarded to: $avp(callfwd)");
+	}
+	$avp(callee_id) = $rd;
+	## S2 ##
+
 	# Dial plan processing
 	if( $avp(dpid)==NULL ) {
 		$avp(dpid)=0;
@@ -274,14 +282,6 @@ route {
 
 
 route[to_user] {
-	## S2 ##
-	if(avp_db_load("$ru","$avp(callfwd)")) {
-		$ru=$avp(callfwd);
-		xlog("forwarded to: $avp(callfwd)");
-	}
-	$avp(callee_id) = $rd;
-	## S2 ##
-
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
 		if (!db_does_uri_exist()) {
