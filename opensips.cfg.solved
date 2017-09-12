@@ -100,6 +100,7 @@ modparam("auth_db|uri", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("auth_db", "load_credentials", "")
 ### S1 ###
+modparam("auth", "calculate_ha1", 1)
 modparam("auth","username_spec","$avp(userspec)")
 modparam("auth","password_spec","$avp(passwd)")
 modparam("auth_db", "load_credentials", "$avp(passwd)=password")
