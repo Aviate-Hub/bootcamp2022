@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 10.1
+#     LAB 10.2
 #
 
 
@@ -169,8 +169,10 @@ modparam("rtpproxy", "default_set", 1)
 ### S1 ###
 loadmodule "acc.so"
 modparam("acc", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
-modparam("acc", "extra_fields",
-	"db: CALLER->caller_id; CALLEE->callee_id; TYPE->$avp(legtype)")
+modparam("acc", "leg_fields", 
+	"db: CALLER->caller_id;CALLEE->callee_id;TYPE->leg_type")
+#modparam("acc", "extra_fields",
+#	"db: CALLER->caller_id; CALLEE->callee_id; TYPE->leg_type")
 ### S1 ###
 
 #### Tracing modules
@@ -291,21 +293,29 @@ route {
 		xlog("L_INFO", "Number of calls from user $fU@$fd is $var(ccaller)");
 		xlog("L_INFO", "Number of calls from domain $fd is $var(cdomain)");
 
-		### S2 ###
+		### S3 ###
 		do_accounting("db","cdr|missed");
-		$acc_extra(CALLER) = $fU;
-		$acc_extra(CALLEE) = $rU;
-		### S2 ###
+		$acc_leg(CALLER) = $fU;
+		$acc_leg(CALLEE) = $rU;
+		### S3 ###
 	}
 
 	#apply DB based aliases
 	alias_db_lookup("dbaliases");
 
+	### S2 ###
 	if(avp_db_load("$ru","$avp(callfwd)")) {
+		$acc_leg(TYPE) = "USER";
+		acc_new_leg();
+		$acc_leg(CALLER) = $rU;
 		$ru=$avp(callfwd);
+		$acc_leg(CALLEE) = $rU;
 		xlog("forwarded to: $avp(callfwd)");
 	}
+	### S3 ###
+
 	$avp(callee_id) = $ru;
+
 
 	# Dial plan processing
 	if( $avp(dpid)==NULL ) {
@@ -351,7 +361,7 @@ route[to_user] {
 	}
 
 	### S3 ###
-	$acc_extra(TYPE) = "USER";
+	$acc_leg(TYPE) = "USER";
 	### S3 ###
 
 	route(relay);
@@ -370,9 +380,7 @@ route[to_media] {
 
 	route(handle_nat);
 
-	### S4 ###
-	$acc_extra(TYPE) = "MEDIA";
-	### S4 ###
+	$acc_leg(TYPE) = "MEDIA";
 
 	t_relay();
 	exit;
@@ -414,9 +422,7 @@ route[to_pstn] {
 
 	route(handle_nat);
 
-	### S5 ###
-	$acc_extra(TYPE) = "PSTN";
-	### S5 ###
+	$acc_leg(TYPE) = "PSTN";
 
 	t_relay();
 	exit;
