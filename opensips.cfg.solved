@@ -237,10 +237,6 @@ failure_route[missed_call] {
 		exit;
 	}
 
-	## --S4-- ## 
-	append_hf("P-hint: (4)new request in failure_route[missed_call]\r\n"); 
-	## --S4-- ## 
-
 	# uncomment the following lines if you want to block client 
 	# redirect based on 3xx replies.
 	##if (t_check_status("3[0-9][0-9]")) {
