@@ -170,7 +170,7 @@ modparam("rtpproxy", "default_set", 1)
 loadmodule "acc.so"
 modparam("acc", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("acc", "extra_fields",
-	"db: CALLER->caller_id; CALLEE->callee_id; TYPE->$avp(legtype)")
+	"db: CALLER->caller_id; CALLEE->callee_id; TYPE->leg_type")
 ### S1 ###
 
 #### Tracing modules
