@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 6.1
+#     LAB 6.2
 #
 
 
@@ -127,12 +127,10 @@ loadmodule "drouting.so"
 modparam("drouting","db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
-## S1 ##
 #### AVP OPerations module
 loadmodule "avpops.so"
 modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("avpops", "avp_table", "usr_preferences")
-## S1 ##
 
 #### Dialplan module
 loadmodule "dialplan.so"
@@ -241,14 +239,26 @@ route {
 	#apply DB based aliases
 	alias_db_lookup("dbaliases");
 
-	## S2 ##
 	if(avp_db_load("$ru","$avp(callfwd)")) {
 		$ru=$avp(callfwd);
 		xlog("forwarded to: $avp(callfwd)");
 	}
 	$avp(callee_id) = $ru;
-	## S2 ##
+	
+	### S1 ###
+	if(avp_db_load("$ru","$avp(huntgroup)")) {
+		$rU=$(avp(huntgroup){s.select,0,,});
+		xlog("forwarded to =$(avp(huntgroup){s.select,0,,})");
+		$avp(hgcount)=0;
+		setflag(HUNTGROUP);
+	}
+	### S1 ###
+	route(to_dialplan);
+}
 
+### S2 ###
+route[to_dialplan] {
+### S2 ###
 	# Dial plan processing
 	if( $avp(dpid)==NULL ) {
 		$avp(dpid)=0;
@@ -280,7 +290,6 @@ route {
 	exit;
 }
 
-
 route[to_user] {
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
@@ -291,7 +300,6 @@ route[to_user] {
 		t_reply("480", "Temporarily Unavailable");
 		exit;
 	}
-
 	route(relay);
 }
 
@@ -368,7 +376,13 @@ route[relay] {
 	if (is_method("INVITE")) {
 		t_on_branch("per_branch_ops");
 		t_on_reply("handle_nat");
-		t_on_failure("missed_call");
+		### S3 ###
+		if(isflagset(HUNTGROUP)) {
+			t_on_failure("huntgroup");
+		} else {
+			t_on_failure("missed_call");
+		}
+		### S3 ###
 	}
 
 	t_relay();
@@ -384,6 +398,22 @@ branch_route[per_branch_ops] {
 onreply_route[handle_nat] {
 	xlog("incoming reply\n");
 }
+
+### S4 ###
+failure_route[huntgroup] {
+	$avp(hgcount)=$avp(hgcount)+1;
+	if($(avp(huntgroup){s.select,$avp(hgcount),,})!=null) {
+		revert_uri();
+		$rU=$(avp(huntgroup){s.select,$avp(hgcount),,});
+		route(to_dialplan);
+		exit;
+	} else {
+		t_reply("404", "No more members on huntgroup"); 
+		exit;
+	}
+}
+### S4 ###
+
 
 failure_route[missed_call] {
 	if (t_was_cancelled()) {
