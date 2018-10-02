@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 7.2
+#     LAB 7.3
 #
 
 
@@ -99,7 +99,8 @@ modparam("auth_db", "password_column", "password")
 modparam("auth_db|uri", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 ### S1 ###
-modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid; $avp(duration)=duration")
+modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid; $avp(duration)=duration; $avp(th)=th")
+
 ### S1 ###
 
 #### Domain Module
@@ -145,6 +146,10 @@ modparam("dialog", "db_mode", 2)
 modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
+### S2 ###
+#### Topology Hiding Module
+loadmodule "topology_hiding.so"
+### S2 ###
 
 #### Tracing modules
 loadmodule "proto_hep.so"
@@ -161,8 +166,6 @@ loadmodule "proto_udp.so"
 # main request routing logic
 
 route {
-	## only incoming SIP requests entering here
-	route(to_homer);
 
 	if (!mf_process_maxfwd_header("10")) {
 		send_reply("483","Too Many Hops");
@@ -248,10 +251,8 @@ route {
 
 	if(is_method("INVITE")) {
 
-		### S2 ###
 		create_dialog("B");
 		$DLG_timeout=$avp(duration);
-		### S2 ###
 
 		### Set profile ###
 		set_dlg_profile("caller","$fU@$fd");
@@ -316,6 +317,11 @@ route[to_user] {
 		exit;
 	}
 
+	### S3 ###
+	if($avp(th)==1) topology_hiding();
+	### S3 ###
+
+
 	route(relay);
 }
 
@@ -347,6 +353,16 @@ route[to_pstn] {
 
 route[handle_sequential]
 {
+	### S4 ###
+	if (topology_hiding_match()) {
+            xlog("Succesfully matched this request to a topology hiding dialog. \n");
+            xlog("Calller side callid is $ci \n");
+            xlog("Callee side callid  is $TH_callee_callid \n");
+            t_relay();
+            exit;
+	}
+	### S4 ###
+
 	# handle hop-by-hop ACK (no routing required)
 	if (is_method("ACK") && t_check_trans()) {
 		t_relay();
