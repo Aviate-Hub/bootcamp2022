@@ -33,7 +33,6 @@ alias=sip.domain.com
 # SIP UDP listerner
 listen=udp:eth0:5060
 
-listen=hep_udp:127.0.0.1:6090
 
 
 
@@ -126,7 +125,6 @@ loadmodule "proto_udp.so"
 
 route {
 	## only incoming SIP requests entering here
-	route(to_homer);
 
 	if (!mf_process_maxfwd_header("10")) {
 		send_reply("483","Too Many Hops");
@@ -155,7 +153,7 @@ route {
 	}
 
 	## authenticate and authorize
-	if (from_uri==myself) {
+	if (is_myself("$fd")) {
 
 		# caller is local
 		# authenticate if from local subscriber
@@ -178,7 +176,7 @@ route {
 	} else {
 
 		# if caller is not local, then called number must be local
-		if (uri!=myself) {
+		if (!is_myself("$rd")) {
 			send_reply("403","Rely forbidden");
 			exit;
 		}
@@ -189,7 +187,7 @@ route {
 	if (!is_method("REGISTER|MESSAGE"))
 		record_route();
 
-	if (!uri==myself) {
+	if (!is_myself("$rd")) {
 		append_hf("P-hint: outbound\r\n");
 		route(relay);
 	}
@@ -300,29 +298,3 @@ failure_route[missed_call] {
 }
 
 
-route[to_homer] {
-	xlog("SCRIPT:DBG: sending message out to Homer\n");
-	# see declaration of tid in trace_id section
-	$var(trace_id) = "tid";
-	$var(trace_type) = NULL;
-
-	t_newtran();
-
-	if (has_totag() && is_method("ACK")) {
-		/* avoid double-tracing hop-by-hop ACKs */
-		if (!t_check_trans())
-			$var(trace_type) = "message";
-	} else {
-		$var(trace_type) = "transaction";
-	}
-
-	# do trace here
-	switch ($var(trace_type)) {
-	case "transaction":
-		sip_trace("$var(trace_id)", "t", "sip|xlog");
-		break;
-	case "message":
-		sip_trace("$var(trace_id)", "m", "sip|xlog");
-		break;
-	}
-}
