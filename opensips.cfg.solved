@@ -31,7 +31,6 @@ auto_aliases=no
 # SIP UDP listerner
 listen=udp:eth0:5060
 
-listen=hep_udp:127.0.0.1:6090
 
 
 
@@ -146,12 +145,6 @@ modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
 
-#### Tracing modules
-loadmodule "proto_hep.so"
-modparam("proto_hep", "hep_id", "[hid]127.0.0.1:9060;transport=udp;version=3")
-loadmodule "siptrace.so"
-modparam("siptrace", "trace_id", "[tid]uri=hep:hid")
-
 
 #### UDP protocol
 loadmodule "proto_udp.so"
@@ -162,7 +155,6 @@ loadmodule "proto_udp.so"
 
 route {
 	## only incoming SIP requests entering here
-	route(to_homer);
 
 	if (!mf_process_maxfwd_header("10")) {
 		send_reply("483","Too Many Hops");
@@ -469,33 +461,3 @@ failure_route[gateway_failure] {
 }
 
 
-route[to_homer] {
-	xlog("SCRIPT:DBG: sending message out to Homer\n");
-	# see declaration of tid in trace_id section
-	$var(trace_id) = "tid";
-	$var(trace_type) = NULL;
-
-	if (!has_totag()) {
-		if (is_method("INVITE"))
-			$var(trace_type) = "dialog";
-		else if (!is_method("CANCEL"))
-			$var(trace_type) = "transaction";
-	} else if (is_method("SUBSCRIBE|NOTIFY")) {
-		$var(trace_type) = "transaction";
-	} else {
-		$var(trace_type) = NULL;
-	}
-
-	# do trace here
-	switch ($var(trace_type)) {
-	case "dialog":
-		sip_trace("$var(trace_id)", "d", "sip|xlog");
-		break;
-	case "transaction":
-		sip_trace("$var(trace_id)", "t", "sip|xlog");
-		break;
-	case "message":
-		sip_trace("$var(trace_id)", "m", "sip|xlog");
-		break;
-	}
-}
