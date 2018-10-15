@@ -108,12 +108,6 @@ modparam("domain", "db_mode", 1)   # Use caching
 modparam("uri|auth_db|usrloc", "use_domain", 1)
 ### S1 ###
 
-#### Tracing modules
-loadmodule "proto_hep.so"
-modparam("proto_hep", "hep_id", "[hid]127.0.0.1:9060;transport=udp;version=3")
-loadmodule "siptrace.so"
-modparam("siptrace", "trace_id", "[tid]uri=hep:hid")
-
 
 #### UDP protocol
 loadmodule "proto_udp.so"
