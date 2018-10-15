@@ -113,12 +113,6 @@ modparam("alias_db", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 ### S1 ###
 
-#### Tracing modules
-loadmodule "proto_hep.so"
-modparam("proto_hep", "hep_id", "[hid]127.0.0.1:9060;transport=udp;version=3")
-loadmodule "siptrace.so"
-modparam("siptrace", "trace_id", "[tid]uri=hep:hid")
-
 
 #### UDP protocol
 loadmodule "proto_udp.so"
