@@ -87,15 +87,9 @@ loadmodule "usrloc.so"
 modparam("usrloc", "db_mode",   2)
 modparam("usrloc", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-### S1 ###
-modparam("usrloc","nat_bflag","NATED_CALLEE")
-### S1 ###
 
 #### REGISTRAR module
 loadmodule "registrar.so"
-### S2 ###
-modparam("registrar", "received_avp", "$avp(rcv)")
-### S2 ###
 
 #### AUTHentication modules
 loadmodule "auth.so"
@@ -156,33 +150,23 @@ modparam("load_balancer", "db_url",
 modparam("load_balancer", "probing_interval", 30)
 modparam("load_balancer", "probing_from", "sip:lb@sip.domain.com")
 
-#### NAT Traversal module
-### S3 ###
-loadmodule "nathelper.so"
-modparam("nathelper", "received_avp", "$avp(rcv)")
-modparam("nathelper", "natping_interval", 30)
-modparam("nathelper", "ping_nated_only", 1)
-modparam("nathelper", "sipping_bflag", "SIPPING_FLAG")
-modparam("nathelper", "sipping_from", "sip:pinger@sip.domain.com")
-### S3 ###
-
-#### RTPproxy module
-### S4 ###
-loadmodule "rtpproxy.so"
-modparam("rtpproxy", "db_url",
+### S1 ###
+#### Clustering modules
+loadmodule "clusterer.so"
+modparam("clusterer", "current_id", __NODE_ID__)
+modparam("clusterer", "db_mode", 1)
+modparam("clusterer", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-modparam("rtpproxy", "default_set", 1)
-### S4 ###
-
-#### Tracing modules
-loadmodule "proto_hep.so"
-modparam("proto_hep", "hep_id", "[hid]127.0.0.1:9060;transport=udp;version=3")
-loadmodule "siptrace.so"
-modparam("siptrace", "trace_id", "[tid]uri=hep:hid")
-
+### S1 ###
 
 #### UDP protocol
 loadmodule "proto_udp.so"
+
+### S2 ###
+#### BINary protocol
+loadmodule "proto_bin.so"
+listen = bin:eth0:5555
+### S2 ###
 
 ####### Routing Logic ########
 
@@ -198,13 +182,6 @@ route {
 	}
 
 	xlog("SCRIPT:DBG: incoming $rm from $si:$sp, from $fu to $ru ($ci)\n");
-
-	## NAT Detection
-	### S5 ###
-	force_rport();
-	if (nat_uac_test("18"))
-		setflag(NATED_CALLER);
-	### S5 ###
 
 	## if it has TO TAG, it is a sequential/in-dialog request
 	if (has_totag()) {
@@ -362,10 +339,6 @@ route[to_media] {
 
 	t_on_failure("media_failover");
 
-	### S6 ###
-	route(handle_nat);
-	### S6 ###
-
 	t_relay();
 	exit;
 }
@@ -404,10 +377,6 @@ route[to_pstn] {
 		t_on_failure("gateway_failure");
 	}
 
-	### S7 ###
-	route(handle_nat);
-	### S7 ###
-
 	t_relay();
 	exit;
 }
@@ -430,13 +399,6 @@ route[handle_sequential]
 		exit;
 	}
 
-	# is the destination end point marked as nated (due a
-	# nated contact originated by this destination) ?
-	### S8 ###
-	if (uri_param("nat","yes"))
-		setbflag(NATED_CALLEE);
-	### S8 ###
-
 	xlog("SCRIPT:DBG: sequential $rm sent to $ru/$du\n");
 	route(relay);
 	exit;
@@ -456,37 +418,10 @@ route[handle_register]
 		exit;
 	}
 
-	# if the REGISTER is originated from behind a NAT, 
-	# set the flag (for future calls going to that destination)
-	# and start pinging
-	### S9 ##
-	if (isflagset(NATED_CALLER)) {
-		fix_nated_register();
-		setbflag(NATED_CALLEE);
-		setbflag(SIPPING_FLAG);
-	}
-	### S9 ###
-
 	if (!save("location"))
 		sl_reply_error();
 	exit;
 }
-
-### S10 ###
-route[handle_nat] {
-	# if caller or callee is nated, use media relay
-	if (isflagset(NATED_CALLER)||isbflagset(NATED_CALLEE)) {
-		if (is_method("BYE")) {
-			rtpproxy_unforce();
-		} else if (has_body("application/sdp")) {
-			rtpproxy_offer("co");
-		}
-	}
-	# if caller is nated, fix the contact
-	if (isflagset(NATED_CALLER))
-		fix_nated_contact(";nat=yes");
-}
-### S10 ###
 
 
 route[relay] {
@@ -496,10 +431,6 @@ route[relay] {
 		t_on_reply("handle_nat");
 		t_on_failure("missed_call");
 	}
-
-	### S11 ###
-	route(handle_nat);
-	### S11 ###
 
 	t_relay();
 	exit;
@@ -513,17 +444,6 @@ branch_route[per_branch_ops] {
 
 onreply_route[handle_nat] {
 	xlog("incoming reply\n");
-
-	### S12 ###
-	# if caller or callee is nated, use media relay
-	if (isflagset(NATED_CALLER) || isbflagset(NATED_CALLEE)) {
-		if (has_body("application/sdp"))
-			rtpproxy_answer("co");
-	}
-	# if callee (sender or this reply) is nated, fix it
-	if ( isbflagset(NATED_CALLEE) )
-		fix_nated_contact(";nat=yes");
-	### S12 ###
 }
 
 failure_route[missed_call] {
