@@ -1,6 +1,6 @@
 #
 # OpenSIPS Bootcamp Training
-#     LAB 9.1
+#     LAB 9.2
 #
 
 
@@ -84,9 +84,12 @@ loadmodule "db_mysql.so"
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
-modparam("usrloc", "db_mode",   2)
-modparam("usrloc", "db_url",
-	"mysql://opensips:opensipsrw@localhost/opensips")
+### S1 ###
+modparam("usrloc", "location_cluster", __CLUSTER_ID__)
+modparam("usrloc", "cluster_mode", "full-sharing")
+modparam("usrloc", "restart_persistency", "sync-from-cluster")
+modparam("usrloc", "sql_write_mode", "none")
+### S1 ###
 
 #### REGISTRAR module
 loadmodule "registrar.so"
@@ -150,31 +153,25 @@ modparam("load_balancer", "db_url",
 modparam("load_balancer", "probing_interval", 30)
 modparam("load_balancer", "probing_from", "sip:lb@sip.domain.com")
 
-### S1 ###
 #### Clustering modules
 loadmodule "clusterer.so"
 modparam("clusterer", "current_id", __NODE_ID__)
 modparam("clusterer", "db_mode", 1)
 modparam("clusterer", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-### S1 ###
 
 #### UDP protocol
 loadmodule "proto_udp.so"
 
-### S2 ###
 #### BINary protocol
 loadmodule "proto_bin.so"
 listen = bin:eth0:5555
-### S2 ###
 
 ####### Routing Logic ########
 
 # main request routing logic
 
 route {
-	## only incoming SIP requests entering here
-	route(to_homer);
 
 	if (!mf_process_maxfwd_header("10")) {
 		send_reply("483","Too Many Hops");
@@ -506,34 +503,3 @@ failure_route[gateway_failure] {
 	}
 }
 
-
-route[to_homer] {
-	xlog("SCRIPT:DBG: sending message out to Homer\n");
-	# see declaration of tid in trace_id section
-	$var(trace_id) = "tid";
-	$var(trace_type) = NULL;
-
-	if (!has_totag()) {
-		if (is_method("INVITE"))
-			$var(trace_type) = "dialog";
-		else if (!is_method("CANCEL"))
-			$var(trace_type) = "transaction";
-	} else if (is_method("SUBSCRIBE|NOTIFY")) {
-		$var(trace_type) = "transaction";
-	} else {
-		$var(trace_type) = NULL;
-	}
-
-	# do trace here
-	switch ($var(trace_type)) {
-	case "dialog":
-		sip_trace("$var(trace_id)", "d", "sip|xlog");
-		break;
-	case "transaction":
-		sip_trace("$var(trace_id)", "t", "sip|xlog");
-		break;
-	case "message":
-		sip_trace("$var(trace_id)", "m", "sip|xlog");
-		break;
-	}
-}
