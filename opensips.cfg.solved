@@ -90,7 +90,7 @@ loadmodule "db_mysql.so"
 #### USeR LOCation module
 loadmodule "usrloc.so"
 ### S3 ###
-modparam("usrloc", "db_mode",   2)
+modparam("usrloc", "working_mode_preset", "single-instance-sql-write-back")
 modparam("usrloc", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 ### S3 ###
@@ -108,13 +108,6 @@ modparam("auth_db|uri", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("auth_db", "load_credentials", "")
 ### S4 ###
-
-#### Tracing modules
-loadmodule "proto_hep.so"
-modparam("proto_hep", "hep_id", "[hid]127.0.0.1:9060;transport=udp;version=3")
-loadmodule "siptrace.so"
-modparam("siptrace", "trace_id", "[tid]uri=hep:hid")
-
 
 #### UDP protocol
 loadmodule "proto_udp.so"
