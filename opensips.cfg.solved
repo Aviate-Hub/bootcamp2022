@@ -84,10 +84,8 @@ loadmodule "db_mysql.so"
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
-### S1 ###
 modparam("usrloc", "location_cluster", __CLUSTER_ID__)
 modparam("usrloc", "working_mode_preset", "full-sharing-cluster")
-### S1 ###
 
 #### REGISTRAR module
 loadmodule "registrar.so"
@@ -143,6 +141,10 @@ modparam("dialog", "profiles_with_value", "caller ; domain")
 modparam("dialog", "db_mode", 2)
 modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
+### S1 ###
+modparam("dialog", "dialog_replication_cluster", __CLUSTER_ID__)
+modparam("dialog", "dlg_sharing_tag", "nodeX=active")
+### S1 ###
 
 #### Load Balancer Module
 loadmodule "load_balancer.so"
@@ -255,7 +257,11 @@ route {
 
 	### Create a new dialog ###
 	if(is_method("INVITE")) {
-		create_dialog();
+		create_dialog("pP");
+
+		### S2 ###
+		set_dlg_sharing_tag("nodeX");
+		### S2 ###
 
 		### Set profile ###
 		set_dlg_profile("caller","$fU@$fd");
