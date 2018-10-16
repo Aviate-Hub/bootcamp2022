@@ -86,9 +86,7 @@ loadmodule "db_mysql.so"
 loadmodule "usrloc.so"
 ### S1 ###
 modparam("usrloc", "location_cluster", __CLUSTER_ID__)
-modparam("usrloc", "cluster_mode", "full-sharing")
-modparam("usrloc", "restart_persistency", "sync-from-cluster")
-modparam("usrloc", "sql_write_mode", "none")
+modparam("usrloc", "working_mode_preset", "full-sharing-cluster")
 ### S1 ###
 
 #### REGISTRAR module
