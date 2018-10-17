@@ -207,7 +207,7 @@ route[relay] {
 
 	#### S3 #### Do not fill in the first part of the lab
 	t_newtran();
-        #### S3 ####
+	#### S3 ####
 
 	#### S2 ####
 	if(is_method("INVITE")) { 
