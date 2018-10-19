@@ -93,6 +93,7 @@ modparam("usrloc", "restart_persistency", "load-from-sql")
 modparam("usrloc", "sql_write_mode", "write-back")
 ### S1 ###
 ### S2 ###
+modparam("usrloc", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 modparam("usrloc", "cachedb_url", "mongodb://10.10.10.50:27017/opensipsDB.userlocation__CLUSTER_ID__") ## REPLACE ME !!!
 loadmodule "cachedb_mongodb.so"
 ### S2 ###
@@ -207,6 +208,7 @@ route {
 			send_reply("404", "Not Found");
 			exit;
 		}
+		record_route();
 		t_relay();
 		exit;
 	}
