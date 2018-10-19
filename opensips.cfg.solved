@@ -84,7 +84,18 @@ loadmodule "db_mysql.so"
 #### USeR LOCation module
 loadmodule "usrloc.so"
 modparam("usrloc", "location_cluster", __CLUSTER_ID__)
-modparam("usrloc", "working_mode_preset", "full-sharing-cluster")
+### S1 ###
+#  keep data local; advertise contacts to other POPs using a NoSQL DB
+modparam("usrloc", "cluster_mode", "federation-cachedb")
+# after a restart, restore in-memory data from a local SQL database
+modparam("usrloc", "restart_persistency", "load-from-sql")
+# do not perform any SQL writes inline with SIP traffic processing 
+modparam("usrloc", "sql_write_mode", "write-back")
+### S1 ###
+### S2 ###
+modparam("usrloc", "cachedb_url", "mongodb://10.10.10.50:27017/opensipsDB.userlocation__CLUSTER_ID__") ## REPLACE ME !!!
+loadmodule "cachedb_mongodb.so"
+### S2 ###
 
 #### REGISTRAR module
 loadmodule "registrar.so"
@@ -140,10 +151,6 @@ modparam("dialog", "profiles_with_value", "caller ; domain")
 modparam("dialog", "db_mode", 2)
 modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-### S1 ###
-modparam("dialog", "dialog_replication_cluster", __CLUSTER_ID__)
-modparam("dialog", "dlg_sharing_tag", "nodeX=active")
-### S1 ###
 
 #### Load Balancer Module
 loadmodule "load_balancer.so"
@@ -193,6 +200,17 @@ route {
 
 	########### only initial requests at this point #########
 	t_check_trans();
+
+	### S4 ###
+	if (cluster_check_addr("__CLUSTER_ID__", "$si")) {
+		if (!lookup("location", "m")) {
+			send_reply("404", "Not Found");
+			exit;
+		}
+		t_relay();
+		exit;
+	}
+	### S4 ###
 
 	if ( is_method("REGISTER") ) {
 		route(handle_register);
@@ -256,11 +274,7 @@ route {
 
 	### Create a new dialog ###
 	if(is_method("INVITE")) {
-		create_dialog("pP");
-
-		### S2 ###
-		set_dlg_sharing_tag("nodeX");
-		### S2 ###
+		create_dialog();
 
 		### Set profile ###
 		set_dlg_profile("caller","$fU@$fd");
@@ -316,7 +330,9 @@ route {
 
 route[to_user] {
 	# do lookup with method filtering
-	if (!lookup("location","m")) {
+	### S3 ###
+	if (!lookup("location","mg")) {
+	### S3 ###
 		if (!db_does_uri_exist()) {
 			send_reply("404","Not Found");
 			exit;
