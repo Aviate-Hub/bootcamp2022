@@ -142,7 +142,13 @@ route {
 	t_check_trans();
 
 	if ( is_method("REGISTER") ) {
-		route(handle_register);
+		 ### S5 ###
+                if(is_from_local()) { 
+                        route(handle_register);
+                } else {
+                        sl_send_reply("403", "Forbidden" );
+                }
+                ### S5 ###
 	}
 
 	## authenticate and authorize
