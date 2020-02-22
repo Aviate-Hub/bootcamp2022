@@ -27,10 +27,7 @@ udp_workers=4
    based on revers DNS on IPs */
 auto_aliases=no
 
-## --S1-- ##
 alias=sip.domain.com
-## --S1-- ##
-
 
 # SIP UDP listerner
 listen=udp:ens3:5060
@@ -74,10 +71,15 @@ modparam("mi_fifo", "fifo_mode", 0666)
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
-modparam("usrloc", "db_mode",   0)
+modparam("usrloc", "working_mode_preset", "single-instance-no-db")
+
 
 #### REGISTRAR module
 loadmodule "registrar.so"
+
+#### S1 ####
+loadmodule "cfgutils.so"
+#### S1 ####
 
 
 #### UDP protocol
@@ -147,12 +149,34 @@ route {
 		exit;
 	}
 
+	#Send any call to extension 1004 to 1.1.1.1
+	### S2 ###
+	if ($rU=="1004") {
+		$rd="1.1.1.1";
+		t_relay();
+		exit;
+	}
+	### S2 ###
+
+
+	### S4 ###
+	t_newtran();
+	### S4 ###
+
+
+	#### S3 ####
+	if(is_method("INVITE")) {
+    		sleep(2);
+	}
+	#### S3 ####
+
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
 		t_reply(404, "Not Found");
 		exit;
 	}
+
 
 	route(relay);
 }
