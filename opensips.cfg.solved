@@ -29,7 +29,7 @@ auto_aliases=no
 
 
 # SIP UDP listerner
-listen=udp:enp0s3:5060
+listen=udp:eth0:5060
 
 
 ####### Modules Section ########
@@ -177,7 +177,7 @@ modparam("dialog", "profiles_no_value", "CCcalls/b")
 
 #### BINary protocol
 loadmodule "proto_bin.so"
-listen = bin:enp0s3:5555
+listen = bin:eth0:5555
 
 #### UDP protocol
 loadmodule "proto_udp.so"
