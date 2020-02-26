@@ -33,7 +33,7 @@ alias=sip.domain.com
 
 
 # SIP UDP listerner
-listen=udp:enp0s3:5060
+listen=udp:eth0:5060
 
 
 ####### Modules Section ########
