@@ -29,7 +29,7 @@ auto_aliases=no
 
 
 # SIP UDP listerner
-listen=udp:ens3:5060
+listen=udp:eth0:5060
 
 
 ####### Modules Section ########
@@ -159,7 +159,7 @@ modparam("clusterer", "db_url",
 ### S2 ###
 #### BINary protocol
 loadmodule "proto_bin.so"
-listen = bin:ens3:5555
+listen = bin:eth0:5555
 ### S2 ###
 
 
