@@ -267,7 +267,7 @@ route {
 
 ## S2 ##
 route[to_pstn] {
-	xlog("routed using drouting");
+	xlog("routed using drouting\n");
 
 	# routing to the pstn
 	if(!do_routing(0)) {
