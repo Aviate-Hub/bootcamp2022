@@ -74,8 +74,6 @@ modparam("httpd", "port", 8080)
 loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
-#### URI module
-
 #### MYSQL module
 loadmodule "db_mysql.so"
 
@@ -93,16 +91,16 @@ loadmodule "auth.so"
 loadmodule "auth_db.so"
 modparam("auth_db", "calculate_ha1", 1)
 modparam("auth_db", "password_column", "password")
-modparam("auth_db|uri", "db_url",
+modparam("auth_db", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("auth_db", "load_credentials", "")
 
 #### Domain Module
 loadmodule "domain.so"
 modparam("domain", "db_url",
-        "mysql://opensips:opensipsrw@localhost/opensips")
+	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("domain", "db_mode", 1)   # Use caching
-modparam("uri|auth_db|usrloc", "use_domain", 1)
+modparam("auth_db|usrloc", "use_domain", 1)
 
 #### Alias DB Module
 loadmodule "alias_db.so"
