@@ -74,8 +74,6 @@ modparam("httpd", "port", 8080)
 loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
-#### URI module
-
 #### MYSQL module
 loadmodule "db_mysql.so"
 
@@ -101,8 +99,9 @@ modparam("auth_db", "load_credentials", "")
 ### S1 ###
 loadmodule "domain.so"
 modparam("domain", "db_url",
-        "mysql://opensips:opensipsrw@localhost/opensips")
-modparam("domain", "db_mode", 1)   # Use caching
+	"mysql://opensips:opensipsrw@localhost/opensips")
+modparam("domain", "db_mode", 1)   # Use caching
+modparam("auth_db|usrloc", "use_domain", 1)
 ### S1 ###
 
 
@@ -140,17 +139,19 @@ route {
 
 	if ( is_method("REGISTER") ) {
 		### S5 ###
-                if(is_from_local()) { 
-                        route(handle_register);
-                } else {
-                        sl_send_reply(403, "Forbidden" );
-                }
-                ### S5 ###
+		if (is_from_local() ) {
+			route(handle_register);
+		} else {
+			send_reply(403,"Forbidden");
+			exit;
+		}
+		### S5 ###
 	}
 
 	## authenticate and authorize
 	### S2 ###
-	if (is_from_local()) {
+	#if(is_myself("$fd")) { /*no multidomain version*/'
+	if(is_from_local()) { /*multidomain version*/
 	### S2 ###
 
 		# caller is local
@@ -173,6 +174,7 @@ route {
 
 		# if caller is not local, then called number must be local
 		### S3 ###
+		#if (!is_myself("$rd")) {
 		if (!is_uri_host_local()) {
 		### S3 ###
 			send_reply(403,"Rely forbidden");
@@ -186,6 +188,7 @@ route {
 		record_route();
 
 	### S4 ###
+	#if (!is_myself("$rd")) {
 	if (!is_uri_host_local()) {
 	### S4 ###
 		append_hf("P-hint: outbound\r\n");
