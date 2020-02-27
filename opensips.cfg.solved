@@ -142,9 +142,9 @@ route {
 		exit;
 	}
 
-	## --S1-- ##
+	### S1 ###
 	append_hf("P-hint: (1)initial request\r\n");
-	## --S1-- ##
+	### S1 ###
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
@@ -173,9 +173,9 @@ route[handle_sequential]
 		exit;
 	}
 
-	## --S2-- ##
+	### S2 ###
 	append_hf("P-hint: (2)sequential request\r\n");
-	## --S2-- ##
+	### S2 ###
 
 	xlog("SCRIPT:DBG: sequential $rm sent to $ru/$du\n");
 	route(relay);
@@ -210,9 +210,9 @@ branch_route[per_branch_ops] {
 
 
 onreply_route[handle_nat] {
-	## --S3-- ##
+	### S3 ###
 	append_hf("P-hint: (3)reply through onreply_route[handle_nat]\r\n");
-	## --S3-- ##
+	### S3 ###
 	xlog("incoming reply\n");
 }
 
