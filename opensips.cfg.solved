@@ -27,9 +27,9 @@ udp_workers=4
    based on revers DNS on IPs */
 auto_aliases=no
 
-## --S1-- ##
+### S1 ###
 alias=sip.domain.com
-## --S1-- ##
+### S1 ###
 
 
 # SIP UDP listerner
