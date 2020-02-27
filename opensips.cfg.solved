@@ -27,9 +27,7 @@ udp_workers=4
    based on revers DNS on IPs */
 auto_aliases=no
 
-## --S1-- ##
 alias=sip.domain.com
-## --S1-- ##
 
 
 # SIP UDP listerner
@@ -70,15 +68,12 @@ loadmodule "mi_fifo.so"
 modparam("mi_fifo", "fifo_name", "/tmp/opensips_fifo")
 modparam("mi_fifo", "fifo_mode", 0666)
 
-#### URI module
-
 #### USeR LOCation module
 loadmodule "usrloc.so"
-modparam("usrloc", "db_mode",   0)
+modparam("usrloc", "working_mode_preset", "single-instance-no-db")
 
 #### REGISTRAR module
 loadmodule "registrar.so"
-
 
 #### UDP protocol
 loadmodule "proto_udp.so"
@@ -147,6 +142,9 @@ route {
 		exit;
 	}
 
+	## --S1-- ##
+	append_hf("P-hint: (1)initial request\r\n");
+	## --S1-- ##
 
 	# do lookup with method filtering
 	if (!lookup("location","m")) {
@@ -175,6 +173,9 @@ route[handle_sequential]
 		exit;
 	}
 
+	## --S2-- ##
+	append_hf("P-hint: (2)sequential request\r\n");
+	## --S2-- ##
 
 	xlog("SCRIPT:DBG: sequential $rm sent to $ru/$du\n");
 	route(relay);
@@ -209,6 +210,9 @@ branch_route[per_branch_ops] {
 
 
 onreply_route[handle_nat] {
+	## --S3-- ##
+	append_hf("P-hint: (3)reply through onreply_route[handle_nat]\r\n");
+	## --S3-- ##
 	xlog("incoming reply\n");
 }
 
