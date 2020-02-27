@@ -74,8 +74,6 @@ modparam("httpd", "port", 8080)
 loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
-#### URI module
-
 #### MYSQL module
 loadmodule "db_mysql.so"
 
@@ -93,7 +91,7 @@ loadmodule "auth.so"
 loadmodule "auth_db.so"
 modparam("auth_db", "calculate_ha1", 1)
 modparam("auth_db", "password_column", "password")
-modparam("auth_db|uri", "db_url",
+modparam("auth_db", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 ### S1 ###
 #modparam("auth_db", "load_credentials", "")
@@ -103,9 +101,9 @@ modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid")
 #### Domain Module
 loadmodule "domain.so"
 modparam("domain", "db_url",
-        "mysql://opensips:opensipsrw@localhost/opensips")
+	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("domain", "db_mode", 1)   # Use caching
-modparam("uri|auth_db|usrloc", "use_domain", 1)
+modparam("auth_db|usrloc", "use_domain", 1)
 
 #### Alias DB Module
 loadmodule "alias_db.so"
@@ -234,14 +232,14 @@ route {
 	if( $avp(dpid)==NULL ) {
 		$avp(dpid)=0;
 	}
-	xlog("Dialplan: Subscriber.s dpid: $avp(dpid) rU=$rU");
+	xlog("Dialplan: Subscriber.s dpid: $avp(dpid) rU=$rU\n");
 
 	if(!dp_translate($avp(dpid),$rU,$rU,$avp(dest))) {
-		xlog("dp_translate result = $rc dest=$avp(dest)");
+		xlog("dp_translate result = $rc dest=$avp(dest)\n");
 		send_reply(404, "Destination Not Found");
 		exit;
 	}
-	xlog("Dialplan: Destination: $avp(dest)");
+	xlog("Dialplan: Destination: $avp(dest)\n");
 
 	if ($avp(dest)=="3") {
 		#Route to usrloc
@@ -289,7 +287,7 @@ route[to_media] {
 
 
 route[to_pstn] {
-	xlog("routed using drouting");
+	xlog("routed using drouting\n");
 
 	# routing to the pstn
 	if(!do_routing(0)) {
