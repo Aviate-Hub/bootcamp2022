@@ -29,8 +29,12 @@ auto_aliases=no
 
 
 # SIP UDP listerner
-listen=udp:eth0:5060
+listen=udp:enp0s3:5060
 
+### S1 ###
+exec_dns_threshold = 1000
+exec_msg_threshold = 1000
+### S1 ###
 
 ####### Modules Section ########
 
@@ -72,10 +76,20 @@ modparam("httpd", "port", 8080)
 loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
+### JSON Event RPC ###
+### S2 ###
+loadmodule "event_jsonrpc.so"
+### S2 ###
+
+
 #### URI module
 
 #### MYSQL module
 loadmodule "db_mysql.so"
+
+### S3 ###
+modparam("db_mysql", "exec_query_threshold", 100)
+### S3 ###
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
@@ -166,10 +180,8 @@ modparam("rtpproxy", "default_set", 1)
 loadmodule "acc.so"
 modparam("acc", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
 
-### S1 ###
 modparam("acc", "leg_fields",
         "db: CALLER->caller_id;CALLEE->callee_id;TYPE->leg_type")
-### S1 ###
 
 modparam("acc", "db_table_missed_calls", "acc")
 
@@ -184,6 +196,28 @@ loadmodule "proto_udp.so"
 
 route {
 	## only incoming SIP requests entering here
+
+	### S4 ###
+	### Test Bench ###
+	if(is_method("OPTIONS")) {
+
+		### DNS Test ###
+		if($rU=="dnstest"){
+			$rd="sip.flagonc.com";
+			t_relay();
+			exit;
+		}
+
+
+		### SQL Test ###
+		if($rU=="sqltest"){
+			avp_db_query("select * from subscriber");
+			send_reply(200,"OK");
+			exit;
+		}
+	}
+	### S4 ###
+
 
 	if (!mf_process_maxfwd_header(10)) {
 		send_reply(483,"Too Many Hops");
@@ -301,17 +335,14 @@ route {
 		xlog("L_INFO", "Number of calls from user $fU@$fd is $var(ccaller)");
 		xlog("L_INFO", "Number of calls from domain $fd is $var(cdomain)");
 
- 		### S2 ###
                 do_accounting("db","cdr|missed");
                 $acc_leg(CALLER) = $fU;
                 $acc_leg(CALLEE) = $rU;
-                ### S2 ###
 
     	}
     	
 	if(avp_db_query("select callfwd from subscriber where username='$rU' and domain='$rd'","$avp(callfwd)")) {
 		if($avp(callfwd)!="") {
-		### S3 ###
 			#Leg #1
 			$acc_leg(TYPE) = "USER";
    			acc_new_leg();
@@ -321,7 +352,6 @@ route {
 			$rU=$avp(callfwd);
    			$acc_leg(CALLEE) = $rU;
         		xlog("forwarded unconditionally to: $avp(callfwd)");
-		### S3 ###
 		}
 
     	}
@@ -398,9 +428,7 @@ route[to_media] {
 
         route(handle_nat);
 
-	### S4 ###
         $acc_leg(TYPE) = "MEDIA";
-	### S4 ###
 
 	t_relay();
 	exit;
