@@ -204,9 +204,9 @@ route {
 	t_check_trans();
 
 	### S4 ###
-	if (cluster_check_addr("__CLUSTER_ID__", "$si")) {
+	if (cluster_check_addr(__CLUSTER_ID__, "$si")) {
 		if (!lookup("location", "m")) {
-			send_reply("404", "Not Found");
+			send_reply(404, "Not Found");
 			exit;
 		}
 		record_route();
