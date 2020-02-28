@@ -138,6 +138,7 @@ modparam("dialog", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
 ### S1 ###
+#### Topology Hiding Module
 loadmodule "topology_hiding.so"
 ### S1 ###
 
