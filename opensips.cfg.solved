@@ -126,6 +126,7 @@ modparam("drouting","db_url",
 #### AVP OPerations module
 loadmodule "avpops.so"
 modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
+modparam("avpops", "avp_table", "usr_preferences")
 ## S1 ##
 
 #### Dialplan module
