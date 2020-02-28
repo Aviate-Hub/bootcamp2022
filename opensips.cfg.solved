@@ -32,6 +32,8 @@ auto_aliases=no
 listen=udp:eth0:5060
 
 
+
+
 ####### Modules Section ########
 
 #set module path
@@ -72,8 +74,6 @@ modparam("httpd", "port", 8080)
 loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
-#### URI module
-
 #### MYSQL module
 loadmodule "db_mysql.so"
 
@@ -82,25 +82,27 @@ loadmodule "usrloc.so"
 modparam("usrloc", "working_mode_preset", "single-instance-sql-write-back")
 modparam("usrloc", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
+modparam("usrloc","nat_bflag","NATED_CALLEE")
 
 #### REGISTRAR module
 loadmodule "registrar.so"
+modparam("registrar", "received_avp", "$avp(rcv)")
 
 #### AUTHentication modules
 loadmodule "auth.so"
 loadmodule "auth_db.so"
 modparam("auth_db", "calculate_ha1", 1)
 modparam("auth_db", "password_column", "password")
-modparam("auth_db|uri", "db_url",
+modparam("auth_db", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("auth_db", "load_credentials", "$avp(rpid)=rpid ;$avp(dpid)= dpid")
 
 #### Domain Module
 loadmodule "domain.so"
 modparam("domain", "db_url",
-        "mysql://opensips:opensipsrw@localhost/opensips")
+	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("domain", "db_mode", 1)   # Use caching
-modparam("uri|auth_db|usrloc", "use_domain", 1)
+modparam("auth_db|usrloc", "use_domain", 1)
 
 #### Alias DB Module
 loadmodule "alias_db.so"
@@ -125,6 +127,7 @@ modparam("drouting","db_url",
 #### AVP OPerations module
 loadmodule "avpops.so"
 modparam("avpops", "db_url", "mysql://opensips:opensipsrw@localhost/opensips")
+modparam("avpops", "avp_table", "usr_preferences")
 
 #### Dialplan module
 loadmodule "dialplan.so"
@@ -135,7 +138,7 @@ loadmodule "dialog.so"
 modparam("dialog", "profiles_with_value", "caller ; domain")
 modparam("dialog", "db_mode", 2)
 modparam("dialog", "db_url",
-        "mysql://opensips:opensipsrw@localhost/opensips")
+	"mysql://opensips:opensipsrw@localhost/opensips")
 
 #### Topology Hiding Module
 loadmodule "topology_hiding.so"
@@ -143,14 +146,11 @@ loadmodule "topology_hiding.so"
 #### Load Balancer Module 
 loadmodule "load_balancer.so"
 modparam("load_balancer", "db_url",
-	"mysql://opensips:opensipsrw@localhost/opensips") # CUSTOMIZE ME
+	"mysql://opensips:opensipsrw@localhost/opensips")
 modparam("load_balancer", "probing_interval", 30)
 modparam("load_balancer", "probing_from", "sip:lb@sip.domain.com")
 
-modparam("usrloc","nat_bflag","NATED_CALLEE")
-
-modparam("registrar", "received_avp", "$avp(rcv)")
-
+#### NAT Traversal Module
 loadmodule "nathelper.so"
 modparam("nathelper", "received_avp", "$avp(rcv)")
 modparam("nathelper", "natping_interval", 30)
@@ -158,6 +158,7 @@ modparam("nathelper", "ping_nated_only", 1)
 modparam("nathelper", "sipping_bflag", "SIPPING_FLAG")
 modparam("nathelper", "sipping_from", "sip:pinger@sip.domain.com")
 
+#### RTP PROXY Module
 loadmodule "rtpproxy.so"
 modparam("rtpproxy", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
@@ -170,7 +171,6 @@ modparam("acc", "extra_fields",
 	"db: CALLER->caller_id; CALLEE->callee_id; TYPE->leg_type")
 modparam("acc", "db_table_missed_calls", "acc")
 ### S1 ###
-
 
 
 #### UDP protocol
@@ -190,10 +190,10 @@ route {
 
 	xlog("SCRIPT:DBG: incoming $rm from $si:$sp, from $fu to $ru ($ci)\n");
 
-        ## NAT Detection
-        force_rport();
-        if (nat_uac_test(18))
-                setflag(NATED_CALLER);
+	## NAT Detection
+	force_rport();
+	if (nat_uac_test(18))
+		setflag(NATED_CALLER);
 
 	## if it has TO TAG, it is a sequential/in-dialog request
 	if (has_totag()) {
@@ -270,29 +270,8 @@ route {
 		exit;
 	}
 
-	if ($rU=~"[0-9].*\+") {
-		#Hunt group
-		$avp(huntgroup)=$rU;
-		$rU=$(avp(huntgroup){s.select,0,+});
-       		xlog("forwarded to =$(avp(huntgroup){s.select,0,+})");
-       		$avp(hgcount)=0;
-       		setflag(HUNTGROUP);
-	}
-
-	#apply DB based aliases
-	alias_db_lookup("dbaliases");
-
-    	if(avp_db_query("select callfwd from subscriber where username='$rU' and domain='$rd'","$avp(callfwd)")) {
-		if($avp(callfwd)!="") {
-        		$rU=$avp(callfwd);
-        		xlog("forwarded unconditionally to: $avp(callfwd)");
-		}
-    	}
-
-	$avp(callee_id)=$ru; #Save the original request uri for later usage
-
-    	### Create a new dialog ###
-    	if(is_method("INVITE")) {
+	### Create a new dialog ###
+	if(is_method("INVITE")) {
 		create_dialog("B");
 		$DLG_timeout=7200;
 
@@ -302,19 +281,37 @@ route {
 
 		get_profile_size("caller","$fU@$fd",$var(ccaller));
 		get_profile_size("domain","$fd",$var(cdomain));
-		xlog("L_INFO", "Number of calls from user $fU@$fd is $var(ccaller)");
-		xlog("L_INFO", "Number of calls from domain $fd is $var(cdomain)");
+		xlog("L_INFO", "Number of calls from user $fU@$fd is $var(ccaller)\n");
+		xlog("L_INFO", "Number of calls from domain $fd is $var(cdomain)\n");
 
-                ### S2 ###
-                do_accounting("db","cdr|missed");
-                $acc_extra(CALLER) = $fU;
-                $acc_extra(CALLEE) = $rU;
-                ### S2 ###
+		### S2 ###
+		do_accounting("db","cdr|missed");
+		$acc_extra(CALLER) = $fU;
+		$acc_extra(CALLEE) = $rU;
+		### S2 ###
 
-    	}
+	}
+
+	if ($rU=~"[0-9].*\+") {
+		# Hunt group
+		$avp(huntgroup)=$rU;
+		$rU=$(avp(huntgroup){s.select,0,+});
+		xlog("forwarded to =$(avp(huntgroup){s.select,0,+})\n");
+		$avp(hgcount)=0;
+		setflag(HUNTGROUP);
+	}
+
+	#apply DB based aliases
+	alias_db_lookup("dbaliases");
+
+	if (avp_db_query("select callfwd from subscriber where username='$rU' and domain='$rd'","$avp(callfwd)") && $avp(callfwd)!="") {
+		$rU=$avp(callfwd);
+		xlog("forwarded unconditionally to: $avp(callfwd)\n");
+	}
+
+	$avp(callee_id)=$ru; #Save the original request uri for later usage
 
 	route(to_dialplan);
-
 }
 
 route[to_dialplan] {
@@ -323,13 +320,13 @@ route[to_dialplan] {
 	if($avp(dpid)==NULL ) {
 		$avp(dpid)=0;
 	}
+	xlog("Dialplan: Subscriber.s dpid: $(avp(dpid))\n");
 
-	xlog("Dialplan: Subscriber.s dpid: $(avp(dpid))");
 	if(!dp_translate($avp(dpid),$rU,$rU,$avp(dest))) {
 		send_reply(404, "Destination Not Found");
 		exit;
 	}
-	xlog("Dialplan: Destination: $avp(dest)");
+	xlog("Dialplan: Destination: $avp(dest)\n");
 
 	if ($avp(dest)=="3") {
 		#Route to usrloc
@@ -364,17 +361,17 @@ route[to_user] {
 		t_reply(480, "Temporarily Unavailable");
 		exit;
 	}
- 	### S3 ###
-        $acc_extra(TYPE) = "USER";
-        ### S3 ###
 
-
+	### S3 ###
+	$acc_extra(TYPE) = "USER";
+	### S3 ###
 
 	route(relay);
 }
 
+
 route[to_media] {
-	xlog("routing to media servers via load balancer");
+	xlog("routing to media servers via load balancer\n");
 
 	if (!lb_start(1, "channel")) {
 		send_reply(500,"No route to Media");
@@ -384,22 +381,19 @@ route[to_media] {
 
 	t_on_failure("media_failover");
 
-        route(handle_nat);
+	route(handle_nat);
 
- 	### S4 ###
-        $acc_extra(TYPE) = "MEDIA";
-        ### S4 ###
-
-
+	### S4 ###
+	$acc_extra(TYPE) = "MEDIA";
+	### S4 ###
 
 	t_relay();
 	exit;
 }
 
 
-
 route[to_pstn] {
-	xlog("routed using drouting");
+	xlog("routed using drouting\n");
 
 	# routing to the pstn
 	if(!do_routing(0)) {
@@ -413,11 +407,11 @@ route[to_pstn] {
 
 	#topology_hiding();
 
-        route(handle_nat);
+	route(handle_nat);
 
- 	### S5 ###
-        $acc_extra(TYPE) = "PSTN";
-        ### S5 ###
+	### S5 ###
+	$acc_extra(TYPE) = "PSTN";
+	### S5 ###
 
 	t_relay();
 	exit;
@@ -426,15 +420,6 @@ route[to_pstn] {
 
 route[handle_sequential]
 {
-
-	if (topology_hiding_match()) {
-            xlog("Successfully matched this request to a topology hiding dialog. \n");
-            xlog("Caller side callid is $ci \n");
-            xlog("Callee side callid  is $TH_callee_callid \n");
-            t_relay();
-            exit;
-	}
-
 	# handle hop-by-hop ACK (no routing required)
 	if (is_method("ACK") && t_check_trans()) {
 		t_relay();
@@ -444,16 +429,23 @@ route[handle_sequential]
 	# sequential request within a dialog should
 	# take the path determined by record-routing
 	if (!loose_route()) {
-		# we do record-routing for all our traffic, so we should not
-		# receive any sequential requests without Route hdr.
-		send_reply(404, "Not Found");
-		exit;
+		if (topology_hiding_match()) {
+			xlog("Successfully matched this request to a topology hiding dialog. \n");
+			xlog("Caller side callid is $ci \n");
+			xlog("Callee side callid  is $TH_callee_callid \n");
+		} else {
+			# no loose_route, no topo_match
+			# we do record-routing for all our traffic, so we should not
+			# receive any sequential requests without Route hdr.
+			send_reply(404, "Not Found");
+			exit;
+		}
 	}
 
-        # is the destination end point marked as nated (due a
-        # nated contact originated by this destination) ?
-        if (ruri_has_param("nat","yes"))
-                setbflag(NATED_CALLEE);
+	# is the destination end point marked as nated (due a
+	# nated contact originated by this destination) ?
+	if (ruri_has_param("nat","yes"))
+		setbflag(NATED_CALLEE);
 
 	xlog("SCRIPT:DBG: sequential $rm sent to $ru/$du\n");
 	route(relay);
@@ -474,14 +466,14 @@ route[handle_register]
 		exit;
 	}
 
-        # if the REGISTER is originated from behind a NAT,
-        # set the flag (for future calls going to that destination)
-        # and start pinging
-        if (isflagset(NATED_CALLER)) {
-                fix_nated_register();
-                setbflag(NATED_CALLEE);
-                setbflag(SIPPING_FLAG);
-        }
+	# if the REGISTER is originated from behind a NAT,
+	# set the flag (for future calls going to that destination)
+	# and start pinging
+	if (isflagset(NATED_CALLER)) {
+		fix_nated_register();
+		setbflag(NATED_CALLEE);
+		setbflag(SIPPING_FLAG);
+	}
 
 	if (!save("location"))
 		sl_reply_error();
@@ -490,52 +482,50 @@ route[handle_register]
 
 
 route[handle_nat] {
-        # if caller or callee is nated, use media relay
-        if (isflagset(NATED_CALLER)||isbflagset(NATED_CALLEE)) {
-                if (is_method("BYE")) {
-                        rtpproxy_unforce();
-                } else if (has_body("application/sdp")) {
-                        rtpproxy_offer("co");
-                }
-        }
-        # if caller is nated, fix the contact
-        if (isflagset(NATED_CALLER))
-                fix_nated_contact(";nat=yes");
+	# if caller or callee is nated, use media relay
+	if (isflagset(NATED_CALLER)||isbflagset(NATED_CALLEE)) {
+		if (is_method("BYE")) {
+			rtpproxy_unforce();
+		} else if (has_body("application/sdp")) {
+			rtpproxy_offer("co");
+		}
+	}
+	# if caller is nated, fix the contact
+	if (isflagset(NATED_CALLER))
+		fix_nated_contact(";nat=yes");
 }
-
-
 
 route[relay] {
 	# for INVITEs enable some additional helper routes
-
 	if (is_method("INVITE")) {
 		t_on_branch("per_branch_ops");
 		t_on_reply("handle_nat");
 		if(isflagset(HUNTGROUP)) {
-    			t_on_failure("huntgroup");
+			t_on_failure("huntgroup");
 		} else {
-    			t_on_failure("missed_call");
+			t_on_failure("missed_call");
 		}
 	}
 
-        route(handle_nat);
+	route(handle_nat);
 
 	t_relay();
 	exit;
 }
 
+
 route[huntgroup] {
-	xlog("Huntgroup count=$avp(hgcount) group=$avp(huntgroup)");
+	xlog("Huntgroup count=$avp(hgcount) group=$avp(huntgroup)\n");
 	$avp(hgcount):=$avp(hgcount)+1;
-        if($(avp(huntgroup){s.select,$avp(hgcount),+})!=null) {
-                revert_uri();
-                $rU=$(avp(huntgroup){s.select,$avp(hgcount),+});
-                route(to_dialplan);
-                exit;
-        } else {
-                t_reply(404, "No more members on huntgroup");
-                exit;
-        }
+	if($(avp(huntgroup){s.select,$avp(hgcount),+})!=null) {
+		revert_uri();
+		$rU=$(avp(huntgroup){s.select,$avp(hgcount),+});
+		route(to_dialplan);
+		exit;
+	} else {
+		t_reply(404, "No more members on huntgroup");
+		exit;
+	}
 }
 
 
@@ -547,14 +537,15 @@ branch_route[per_branch_ops] {
 onreply_route[handle_nat] {
 	xlog("incoming reply\n");
 
-        # if caller or callee is nated, use media relay
-        if (isflagset(NATED_CALLER) || isbflagset(NATED_CALLEE)) {
-                if (has_body("application/sdp"))
-                        rtpproxy_answer("co");
-        }
-        # if callee (sender or this reply) is nated, fix it
-        if ( isbflagset(NATED_CALLEE) )
-                fix_nated_contact(";nat=yes");
+	# if caller or callee is nated, use media relay
+	if (isflagset(NATED_CALLER) || isbflagset(NATED_CALLEE)) {
+		if (has_body("application/sdp"))
+			rtpproxy_answer("co");
+	}
+	# if callee (sender or this reply) is nated, fix it
+	if ( isbflagset(NATED_CALLEE) )
+		fix_nated_contact(";nat=yes");
+
 }
 
 failure_route[missed_call] {
@@ -567,16 +558,13 @@ failure_route[missed_call] {
 	##--
 	if (t_check_status("486")) {
 		$ru = $avp(callee_id); #recover the original uri
-		if(avp_db_query("select fwdbusy from subscriber where username='$rU' and domain='$rd'","$avp(fwdbusy)")) {
-			if($avp(fwdbusy)!="") {
-        			$rU=$avp(fwdbusy);
-        			xlog("forwarded on busy to: $avp(fwdbusy)");
-        			route(to_dialplan);
-			}
-        	}
+		if (avp_db_query("select fwdbusy from subscriber where username='$rU' and domain='$rd'","$avp(fwdbusy)") && $avp(fwdbusy)!="") {
+			$rU=$avp(fwdbusy);
+			xlog("forwarded on busy to: $avp(fwdbusy)\n");
+			route(to_dialplan);
+		}
 		exit;
 	}
-
 
 	##--
 	##-- If timeout (408) or unavailable temporarily (480),
@@ -584,14 +572,12 @@ failure_route[missed_call] {
 	##--
 	if (t_check_status("408") || t_check_status("480")) {
 		$ru = $avp(callee_id); #recover the original uri
-                if(avp_db_query("select noanswer from subscriber where username='$rU' and domain='$rd'","$avp(noanswer)")) {
-			if($avp(noanswer)!="") {
-                        	$rU=$avp(noanswer);
-                        	xlog("forwarded on non answer to: $avp(noanswer)");
-                        	route(to_dialplan);
-			}
-                }
-                exit;
+		if (avp_db_query("select noanswer from subscriber where username='$rU' and domain='$rd'","$avp(noanswer)") && $avp(noanswer)!="") {
+			$rU=$avp(noanswer);
+			xlog("forwarded on non answer to: $avp(noanswer)\n");
+			route(to_dialplan);
+		}
+		exit;
 	}
 
 	# uncomment the following lines if you want to block client 
@@ -613,8 +599,9 @@ failure_route[gateway_failure] {
 	if (t_check_status("[56][0-9][0-9]") ||
 	(t_local_replied("all") && t_check_status("408")) ) {
 		xlog("GW failover case detected, looking for a next one\n");
+		dr_disable();
 		if (use_next_gw()) {
-			xlog ("next gateway is $ru \n");
+			xlog ("next gateway is $ru\n");
 			t_on_failure("gateway_failure");
 			t_relay();
 			exit;
@@ -624,10 +611,12 @@ failure_route[gateway_failure] {
 	}
 }
 
+
 failure_route[huntgroup] {
-	xlog("Huntgroup failure route count=$avp(hgcount)");
+	xlog("Huntgroup failure route count=$avp(hgcount)\n");
 	route(huntgroup);
 }
+
 
 failure_route[media_failover] {
 	if (t_was_cancelled())
@@ -635,7 +624,8 @@ failure_route[media_failover] {
 
 	if ( t_check_status( "[56][0-9][0-9]" ) ||
 	(t_local_replied("all") && t_check_status("408"))) {
-		# media server failover -> mark it as disabled
+		# media server failover -> mark it as probing
+		xlog("Media server routing failed with reply $T_reply_code\n");
 		lb_disable_dst();
 		# try another media server, if available
 		if (!lb_next()) {
@@ -649,4 +639,5 @@ failure_route[media_failover] {
 		t_relay();
 	}
 }
+
 
