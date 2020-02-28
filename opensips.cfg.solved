@@ -29,12 +29,15 @@ auto_aliases=no
 
 
 # SIP UDP listerner
-listen=udp:enp0s3:5060
+listen=udp:eth0:5060
 
 ### S1 ###
+#HEPv3 listener
+listen = hep_tcp:127.0.0.1:6061 
+### S1 ###
+
 exec_dns_threshold = 1000
 exec_msg_threshold = 1000
-### S1 ###
 
 ####### Modules Section ########
 
@@ -77,9 +80,7 @@ loadmodule "mi_http.so"
 modparam("mi_http", "root", "json")
 
 ### JSON Event RPC ###
-### S2 ###
 loadmodule "event_jsonrpc.so"
-### S2 ###
 
 
 #### URI module
@@ -87,9 +88,7 @@ loadmodule "event_jsonrpc.so"
 #### MYSQL module
 loadmodule "db_mysql.so"
 
-### S3 ###
 modparam("db_mysql", "exec_query_threshold", 100)
-### S3 ###
 
 #### USeR LOCation module
 loadmodule "usrloc.so"
@@ -185,7 +184,10 @@ modparam("acc", "leg_fields",
 
 modparam("acc", "db_table_missed_calls", "acc")
 
-
+### S2 ###
+loadmodule "tracer.so"
+loadmodule "proto_hep.so"
+### S2 ###
 
 #### UDP protocol
 loadmodule "proto_udp.so"
@@ -196,28 +198,6 @@ loadmodule "proto_udp.so"
 
 route {
 	## only incoming SIP requests entering here
-
-	### S4 ###
-	### Test Bench ###
-	if(is_method("OPTIONS")) {
-
-		### DNS Test ###
-		if($rU=="dnstest"){
-			$rd="sip.flagonc.com";
-			t_relay();
-			exit;
-		}
-
-
-		### SQL Test ###
-		if($rU=="sqltest"){
-			avp_db_query("select * from subscriber");
-			send_reply(200,"OK");
-			exit;
-		}
-	}
-	### S4 ###
-
 
 	if (!mf_process_maxfwd_header(10)) {
 		send_reply(483,"Too Many Hops");
