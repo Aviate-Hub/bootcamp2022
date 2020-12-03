@@ -108,18 +108,14 @@ modparam("alias_db", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
 
 #### IP-based Permissions Module
-## S1 ##
 loadmodule "permissions.so"
 modparam("permissions", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-## S1 ##
 
 #### Group-based ACL Module
-## S2 ##
 loadmodule "group.so"
 modparam("group", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
-## S2 ##
 
 #### UDP protocol
 loadmodule "proto_udp.so"
@@ -158,15 +154,16 @@ route {
 	}
 
 	## authenticate and authorize
-	## S3 ##
 	if (check_source_address(0)) {
 
-		# caller is a gateway
+		# if the caller is a gateway we will replace the domain to the internal domain
+		### S1 ###
+		$rd="sip.domain.com";
+		###S1###
 
-	} else
+	} else {
 
-	## S3 ##
-	if (is_from_local()) {
+	  if (is_from_local()) {
 
 		# caller is local
 		# authenticate if from local subscriber
@@ -184,13 +181,15 @@ route {
 		consume_credentials();
 		# caller authenticated
 
-	} else {
+	  } else {
 
 		# if caller is not local, then called number must be local
 		if (!is_uri_host_local()) {
 			send_reply(403,"Rely forbidden");
 			exit;
 		}
+
+	  }
 
 	}
 
@@ -304,7 +303,7 @@ route[handle_register]
 {
 	# authenticate the REGISTER requests
 	if (!www_authorize("", "subscriber")) {
-		www_challenge("", "auth");
+		www_challenge("", "auth,auth-int");
 		exit;
 	}
 
