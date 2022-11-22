@@ -162,6 +162,8 @@ route {
 	if (check_source_address(0)) {
 
 		# caller is a gateway
+		xlog("incoming PSTN call from GW $si:$si, authorizing it\n");
+		$rd = "sip.domain.com";
 
 	} else
 
@@ -270,7 +272,7 @@ route {
 route[to_pstn] {
 	# routing to the pstn (Use the IP address of the gateway)
 	# Please use as the IP address one of the gateways provided
-	sethostport("54.234.119.144:5600");
+	sethostport("sipa.flagonc.com:5600");
 	t_relay();
 	exit;
 }
