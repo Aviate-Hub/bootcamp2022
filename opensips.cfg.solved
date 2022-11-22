@@ -253,7 +253,7 @@ route[handle_register]
 	### Caching for registration passwords ###
 	# do we have the password cached ?
 	if(cache_fetch("local","passwd_$tU@$td",$avp(passwd))) {
-
+		xlog("SCRIPT: Using cached password for $tU@$td\n");
 		$avp(userspec) = $tU;
 		xlog("SCRIPT: stored password is $avp(passwd)\n");
 		# perform auth from variables
@@ -266,7 +266,7 @@ route[handle_register]
 		}
 
 	} else {
-
+		xlog("SCRIPT: Using password from DB for $tU@$td\n");
 		# perform DB authentication ->
 		# password will be loaded from DB automatically
 	### S3 ###
