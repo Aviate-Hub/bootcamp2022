@@ -151,8 +151,7 @@ modparam("load_balancer", "probing_from", "sip:lb@sip.domain.com")
 ### S1 ###
 #### Clustering modules
 loadmodule "clusterer.so"
-modparam("clusterer", "my_node_id", __NODE_ID__)
-#modparam("clusterer", "my_node_id", 1)
+modparam("clusterer", "my_node_id", __NODE_ID__) # FIXME !!
 modparam("clusterer", "db_mode", 1)
 modparam("clusterer", "db_url",
 	"mysql://opensips:opensipsrw@localhost/opensips")
