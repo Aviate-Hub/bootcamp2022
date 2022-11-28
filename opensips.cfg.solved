@@ -394,8 +394,7 @@ route[huntgroup] {
 	xlog("Huntgroup count=$avp(hgcount) group=$avp(huntgroup)\n");
 	$avp(hgcount):=$avp(hgcount)+1;
 	if($(avp(huntgroup){s.select,$avp(hgcount),+})!=null) {
-		revert_uri();
-		$rU=$(avp(huntgroup){s.select,$avp(hgcount),+});
+		$rU="sip:"+$(avp(huntgroup){s.select,$avp(hgcount),+})+"@"+$td;
 		route(to_dialplan);
 		exit;
 	} else {
